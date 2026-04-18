@@ -1,13 +1,4 @@
-mod decrypt;
-mod encrypt;
-mod sbox;
-
-fn print_hex_array(arr: &[u8; 16]) {
-    for byte in arr.iter() {
-        print!("{:02x} ", byte);
-    }
-    println!();
-}
+use tiber::{print_hex_array, encrypt, decrypt};
 
 fn main() {
     let input = b"Hello, world!";

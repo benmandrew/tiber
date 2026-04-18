@@ -1,12 +1,16 @@
+//! AES encryption routines.
 use crate::sbox;
 
-fn sub_bytes(state: &mut [u8; 16]) {
+/// Applies the S-box to each byte of the state.
+pub fn sub_bytes(state: &mut [u8; 16]) {
     for byte in state.iter_mut() {
         *byte = sbox::S_BOX[*byte as usize];
     }
 }
 
-fn shift_rows(state: &mut [u8; 16]) {
+/// Invertible, non-linear transformation of the state in which a substitution
+/// table, called an S-box, is applied independently to each byte in the state.
+pub fn shift_rows(state: &mut [u8; 16]) {
     let temp = *state;
     state[0] = temp[0];
     state[1] = temp[5];
@@ -26,7 +30,9 @@ fn shift_rows(state: &mut [u8; 16]) {
     state[15] = temp[11];
 }
 
-fn mix_columns(state: &mut [u8; 16]) {
+/// Transformation of the state that multiplies each of the four columns of
+/// the state by a single fixed matrix.
+pub fn mix_columns(state: &mut [u8; 16]) {
     let temp = *state;
     state[0] = temp[0] ^ temp[4] ^ temp[8] ^ temp[12];
     state[1] = temp[1] ^ temp[5] ^ temp[9] ^ temp[13];
@@ -34,12 +40,16 @@ fn mix_columns(state: &mut [u8; 16]) {
     state[3] = temp[3] ^ temp[7] ^ temp[11] ^ temp[15];
 }
 
-fn add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
+/// Transformation of the state in which a round key is combined with the
+/// state by applying the bitwise XOR operation. Each round key consists of
+/// four words from the key schedule.
+pub fn add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
     for i in 0..16 {
         state[i] ^= round_key[i];
     }
 }
 
+/// AES encryption routine.
 pub fn encrypt(state: &mut [u8; 16], round_keys: &[[u8; 16]; 11]) {
     add_round_key(state, &round_keys[0]);
     for round_key in round_keys.iter().skip(1) {

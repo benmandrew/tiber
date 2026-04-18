@@ -17,8 +17,10 @@ jobs:
           override: true
       - name: Check formatting
         run: cargo fmt --all -- --check
-      - name: Lint with Clippy
+      - name: Lint
         run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Docs
+        run: cargo doc --document-private-items
 
   test:
     runs-on: ubuntu-latest

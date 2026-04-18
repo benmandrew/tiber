@@ -1,12 +1,15 @@
+//! AES decryption routines.
 use crate::sbox;
 
-fn inv_sub_bytes(state: &mut [u8; 16]) {
+/// Applies the inverse S-box to each byte of the state.
+pub fn inv_sub_bytes(state: &mut [u8; 16]) {
     for byte in state.iter_mut() {
         *byte = sbox::INV_S_BOX[*byte as usize];
     }
 }
 
-fn inv_shift_rows(state: &mut [u8; 16]) {
+/// [`inv_shift_rows`] is the inverse of the [`shift_rows`](crate::encrypt::shift_rows) function.
+pub fn inv_shift_rows(state: &mut [u8; 16]) {
     let temp = *state;
     state[0] = temp[0];
     state[1] = temp[13];
@@ -44,7 +47,8 @@ fn mul(x: u8, y: u8) -> u8 {
     r
 }
 
-fn inv_mix_columns(state: &mut [u8; 16]) {
+/// [`inv_mix_columns`] is the inverse of the [`mix_columns`](crate::encrypt::mix_columns) function.
+pub fn inv_mix_columns(state: &mut [u8; 16]) {
     let temp = *state;
     for c in 0..4 {
         let s0 = temp[c * 4];
@@ -58,12 +62,16 @@ fn inv_mix_columns(state: &mut [u8; 16]) {
     }
 }
 
-fn inv_add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
+/// Transformation of the state in which a round key is combined with the
+/// state by applying the bitwise XOR operation. Each round key consists of
+/// four words from the key schedule.
+pub fn inv_add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
     for i in 0..16 {
         state[i] ^= round_key[i];
     }
 }
 
+/// AES decryption routine.
 pub fn decrypt(state: &mut [u8; 16], round_keys: &[[u8; 16]; 11]) {
     inv_add_round_key(state, &round_keys[10]);
     inv_shift_rows(state);
