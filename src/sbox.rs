@@ -40,18 +40,24 @@ pub static INV_S_BOX: [u8; 256] = [
 
 #[cfg(test)]
 mod tests {
-    use super::super::sbox::{S_BOX, INV_S_BOX};
+    use super::super::sbox::{INV_S_BOX, S_BOX};
 
     #[test]
     fn sbox_and_invsbox_are_inverses() {
         for i in 0u8..=255 {
             let s = S_BOX[i as usize];
             let inv = INV_S_BOX[s as usize];
-            assert_eq!(inv, i, "INV_S_BOX[S_BOX[{i:02x}]] = {inv:02x}, expected {i:02x}");
+            assert_eq!(
+                inv, i,
+                "INV_S_BOX[S_BOX[{i:02x}]] = {inv:02x}, expected {i:02x}"
+            );
 
             let inv_s = INV_S_BOX[i as usize];
             let s_inv = S_BOX[inv_s as usize];
-            assert_eq!(s_inv, i, "S_BOX[INV_S_BOX[{i:02x}]] = {s_inv:02x}, expected {i:02x}");
+            assert_eq!(
+                s_inv, i,
+                "S_BOX[INV_S_BOX[{i:02x}]] = {s_inv:02x}, expected {i:02x}"
+            );
         }
     }
 }

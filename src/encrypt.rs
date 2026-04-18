@@ -1,13 +1,13 @@
 use crate::sbox;
 
 fn sub_bytes(state: &mut [u8; 16]) {
-    for i in 0..16 {
-        state[i] = sbox::S_BOX[state[i] as usize];
+    for byte in state.iter_mut() {
+        *byte = sbox::S_BOX[*byte as usize];
     }
 }
 
 fn shift_rows(state: &mut [u8; 16]) {
-    let temp = state.clone();
+    let temp = *state;
     state[0] = temp[0];
     state[1] = temp[5];
     state[2] = temp[10];
@@ -27,7 +27,7 @@ fn shift_rows(state: &mut [u8; 16]) {
 }
 
 fn mix_columns(state: &mut [u8; 16]) {
-    let temp = state.clone();
+    let temp = *state;
     state[0] = temp[0] ^ temp[4] ^ temp[8] ^ temp[12];
     state[1] = temp[1] ^ temp[5] ^ temp[9] ^ temp[13];
     state[2] = temp[2] ^ temp[6] ^ temp[10] ^ temp[14];
@@ -42,11 +42,11 @@ fn add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
 
 pub fn encrypt(state: &mut [u8; 16], round_keys: &[[u8; 16]; 11]) {
     add_round_key(state, &round_keys[0]);
-    for round in 1..10 {
+    for round_key in round_keys.iter().skip(1) {
         sub_bytes(state);
         shift_rows(state);
         mix_columns(state);
-        add_round_key(state, &round_keys[round]);
+        add_round_key(state, round_key);
     }
     sub_bytes(state);
     shift_rows(state);

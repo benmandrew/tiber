@@ -1,13 +1,13 @@
 use crate::sbox;
 
 fn inv_sub_bytes(state: &mut [u8; 16]) {
-    for i in 0..16 {
-        state[i] = sbox::INV_S_BOX[state[i] as usize];
+    for byte in state.iter_mut() {
+        *byte = sbox::INV_S_BOX[*byte as usize];
     }
 }
 
 fn inv_shift_rows(state: &mut [u8; 16]) {
-    let temp = state.clone();
+    let temp = *state;
     state[0] = temp[0];
     state[1] = temp[13];
     state[2] = temp[10];
@@ -45,7 +45,7 @@ fn mul(x: u8, y: u8) -> u8 {
 }
 
 fn inv_mix_columns(state: &mut [u8; 16]) {
-    let temp = state.clone();
+    let temp = *state;
     for c in 0..4 {
         let s0 = temp[c * 4];
         let s1 = temp[c * 4 + 1];
