@@ -187,3 +187,21 @@ fn main() {
     decrypt(&mut state, &round_keys);
     print_hex_array(&state);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{S_BOX, INV_S_BOX};
+
+    #[test]
+    fn sbox_and_invsbox_are_inverses() {
+        for i in 0u8..=255 {
+            let s = S_BOX[i as usize];
+            let inv = INV_S_BOX[s as usize];
+            assert_eq!(inv, i, "INV_S_BOX[S_BOX[{:02x}]] = {:02x}, expected {:02x}", i, inv, i);
+
+            let inv_s = INV_S_BOX[i as usize];
+            let s_inv = S_BOX[inv_s as usize];
+            assert_eq!(s_inv, i, "S_BOX[INV_S_BOX[{:02x}]] = {:02x}, expected {:02x}", i, s_inv, i);
+        }
+    }
+}
