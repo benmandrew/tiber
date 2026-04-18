@@ -76,3 +76,91 @@ pub fn decrypt(state: &mut [u8; 16], round_keys: &[[u8; 16]; 11]) {
     }
     inv_add_round_key(state, &round_keys[0]);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sbox::INV_S_BOX;
+
+    #[test]
+    fn test_inv_sub_bytes_identity() {
+        let mut state = [0u8; 16];
+        inv_sub_bytes(&mut state);
+        assert_eq!(state, [INV_S_BOX[0]; 16]);
+
+        let mut state = [255u8; 16];
+        inv_sub_bytes(&mut state);
+        assert_eq!(state, [INV_S_BOX[255]; 16]);
+    }
+
+    #[test]
+    fn test_inv_sub_bytes_varied() {
+        let mut state = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let expected: [u8; 16] = [
+            INV_S_BOX[0],
+            INV_S_BOX[1],
+            INV_S_BOX[2],
+            INV_S_BOX[3],
+            INV_S_BOX[4],
+            INV_S_BOX[5],
+            INV_S_BOX[6],
+            INV_S_BOX[7],
+            INV_S_BOX[8],
+            INV_S_BOX[9],
+            INV_S_BOX[10],
+            INV_S_BOX[11],
+            INV_S_BOX[12],
+            INV_S_BOX[13],
+            INV_S_BOX[14],
+            INV_S_BOX[15],
+        ];
+        inv_sub_bytes(&mut state);
+        assert_eq!(state, expected);
+    }
+
+    #[test]
+    fn test_inv_shift_rows_identity() {
+        let mut state = [0u8; 16];
+        inv_shift_rows(&mut state);
+        assert_eq!(state, [0u8; 16]);
+    }
+
+    #[test]
+    fn test_inv_shift_rows_patterned() {
+        let mut state = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        inv_shift_rows(&mut state);
+        let expected = [0, 13, 10, 7, 4, 1, 14, 11, 8, 5, 2, 15, 12, 9, 6, 3];
+        assert_eq!(state, expected);
+    }
+
+    #[test]
+    fn test_inv_mix_columns_identity() {
+        let mut state = [0u8; 16];
+        inv_mix_columns(&mut state);
+        assert_eq!(state, [0u8; 16]);
+    }
+
+    #[test]
+    fn test_inv_mix_columns_patterned() {
+        let mut state = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let before = state;
+        inv_mix_columns(&mut state);
+        assert_ne!(state, before);
+    }
+
+    #[test]
+    fn test_inv_add_round_key_identity() {
+        let mut state = [0u8; 16];
+        let round_key = [0u8; 16];
+        inv_add_round_key(&mut state, &round_key);
+        assert_eq!(state, [0u8; 16]);
+    }
+
+    #[test]
+    fn test_inv_add_round_key_patterned() {
+        let mut state = [1u8; 16];
+        let round_key = [2u8; 16];
+        inv_add_round_key(&mut state, &round_key);
+        assert_eq!(state, [3u8; 16]);
+    }
+}
