@@ -1,7 +1,6 @@
 //! AES encryption routines.
 use crate::key::Key128;
 use crate::sbox;
-use crate::util;
 
 /// Applies the S-box to each byte of the state.
 pub fn sub_bytes(state: &mut [u8; 16]) {
@@ -63,35 +62,16 @@ pub fn add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
 
 /// AES encryption routine.
 pub fn encrypt(state: &mut [u8; 16], key: &Key128) {
-    util::print_hex_array(&state);
     add_round_key(state, &key.get_round_key(0));
-    print!("AddRoundKey: ");
-    util::print_hex_array(&state);
     for round in 1..key.n_round_keys - 1 {
-        println!(" Round {}", round);
         sub_bytes(state);
-        print!("SubBytes:    ");
-        util::print_hex_array(&state);
         shift_rows(state);
-        print!("ShiftRows:   ");
-        util::print_hex_array(&state);
         mix_columns(state);
-        print!("MixColumns:  ");
-        util::print_hex_array(&state);
         add_round_key(state, &key.get_round_key(round));
-        print!("AddRoundKey: ");
-        util::print_hex_array(&state);
     }
-    println!(" Final Round");
     sub_bytes(state);
-    print!("SubBytes:    ");
-    util::print_hex_array(&state);
     shift_rows(state);
-    print!("ShiftRows:   ");
-    util::print_hex_array(&state);
     add_round_key(state, &key.get_round_key(key.n_round_keys - 1));
-    print!("AddRoundKey: ");
-    util::print_hex_array(&state);
 }
 
 #[cfg(test)]

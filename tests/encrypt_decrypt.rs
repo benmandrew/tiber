@@ -1,0 +1,83 @@
+use tiber::decrypt::decrypt;
+use tiber::encrypt::encrypt;
+use tiber::key::Key128;
+
+#[test]
+fn test_encrypt_decrypt_e2e_zero() {
+    let key = Key128::new([0u8; 16]);
+    let mut data = [0u8; 16];
+    let original = data;
+    encrypt(&mut data, &key);
+    decrypt(&mut data, &key);
+    assert_eq!(data, original);
+}
+
+#[test]
+fn test_encrypt_decrypt_e2e_pattern() {
+    let key = Key128::new([
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32,
+        0x10,
+    ]);
+    let mut data = [
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee,
+        0xff,
+    ];
+    let original = data;
+    encrypt(&mut data, &key);
+    decrypt(&mut data, &key);
+    assert_eq!(data, original);
+}
+
+#[test]
+fn test_encrypt_decrypt_e2e_random() {
+    let key = Key128::new([
+        0x13, 0x57, 0x9b, 0xdf, 0x24, 0x68, 0xac, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+        0x88,
+    ]);
+    let mut data = [
+        0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde,
+        0xf0,
+    ];
+    let original = data;
+    encrypt(&mut data, &key);
+    decrypt(&mut data, &key);
+    assert_eq!(data, original);
+}
+
+#[test]
+fn test_encrypt_decrypt_e2e_various_keys_and_data() {
+    let keys = [
+        [0u8; 16],
+        [0xff; 16],
+        [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
+            0x32, 0x10,
+        ],
+    ];
+    let datas = [
+        [0u8; 16],
+        [0xff; 16],
+        [
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+            0xee, 0xff,
+        ],
+        [
+            0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc,
+            0xde, 0xf0,
+        ],
+    ];
+    for key_bytes in &keys {
+        let key = Key128::new(*key_bytes);
+        for data_bytes in &datas {
+            let mut data = *data_bytes;
+            let original = data;
+            encrypt(&mut data, &key);
+            decrypt(&mut data, &key);
+            assert_eq!(
+                data, original,
+                "Failed for key {:?} and data {:?}",
+                key_bytes, data_bytes
+            );
+        }
+    }
+}
