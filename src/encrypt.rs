@@ -1,5 +1,5 @@
 //! AES encryption routines.
-use crate::key::Key128;
+use crate::key::AesKey;
 use crate::sbox;
 
 /// Applies the S-box to each byte of the state.
@@ -61,9 +61,9 @@ pub fn add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
 }
 
 /// AES encryption routine.
-pub fn encrypt(state: &mut [u8; 16], key: &Key128) {
+pub fn encrypt<K: AesKey>(state: &mut [u8; 16], key: &K) {
     add_round_key(state, &key.get_round_key(0));
-    for round in 1..key.n_round_keys - 1 {
+    for round in 1..key.n_round_keys() - 1 {
         sub_bytes(state);
         shift_rows(state);
         mix_columns(state);
@@ -71,7 +71,7 @@ pub fn encrypt(state: &mut [u8; 16], key: &Key128) {
     }
     sub_bytes(state);
     shift_rows(state);
-    add_round_key(state, &key.get_round_key(key.n_round_keys - 1));
+    add_round_key(state, &key.get_round_key(key.n_round_keys() - 1));
 }
 
 #[cfg(test)]

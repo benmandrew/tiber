@@ -1,5 +1,5 @@
 //! AES decryption routines.
-use crate::key::Key128;
+use crate::key::AesKey;
 use crate::sbox;
 
 /// Applies the inverse S-box to each byte of the state.
@@ -75,11 +75,11 @@ pub fn inv_add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
 }
 
 /// AES decryption routine.
-pub fn decrypt(state: &mut [u8; 16], key: &Key128) {
-    inv_add_round_key(state, &key.get_round_key(key.n_round_keys - 1));
+pub fn decrypt<K: AesKey>(state: &mut [u8; 16], key: &K) {
+    inv_add_round_key(state, &key.get_round_key(key.n_round_keys() - 1));
     inv_shift_rows(state);
     inv_sub_bytes(state);
-    for round in (1..key.n_round_keys - 1).rev() {
+    for round in (1..key.n_round_keys() - 1).rev() {
         inv_add_round_key(state, &key.get_round_key(round));
         inv_mix_columns(state);
         inv_shift_rows(state);

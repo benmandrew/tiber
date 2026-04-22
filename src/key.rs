@@ -1,9 +1,51 @@
 //! AES key routines
 use crate::sbox;
 
+/// Trait for AES key types (Key128, Key192, Key256)
+pub trait AesKey {
+    /// Returns the number of round keys, which determines the number of rounds in AES.
+    fn n_round_keys(&self) -> usize;
+    /// Retrieves the round key for a specific round. Each round key consists of four words from the expanded key schedule.
+    fn get_round_key(&self, round: usize) -> [[u8; 4]; 4];
+}
+
+impl AesKey for Key128 {
+    fn n_round_keys(&self) -> usize {
+        self.n_round_keys
+    }
+    fn get_round_key(&self, round: usize) -> [[u8; 4]; 4] {
+        self.get_round_key(round)
+    }
+}
+
+impl AesKey for Key192 {
+    fn n_round_keys(&self) -> usize {
+        self.n_round_keys
+    }
+    fn get_round_key(&self, round: usize) -> [[u8; 4]; 4] {
+        self.get_round_key(round)
+    }
+}
+
+impl AesKey for Key256 {
+    fn n_round_keys(&self) -> usize {
+        self.n_round_keys
+    }
+    fn get_round_key(&self, round: usize) -> [[u8; 4]; 4] {
+        self.get_round_key(round)
+    }
+}
+
 macro_rules! define_aes_key_type {
     ($name:ident, $key_size:expr, $n_keywords:expr, $n_round_keys:expr) => {
-        /// Macro to define AES Key types with compile-time checked round key size and methods.
+        #[doc = "AES Key type with compile-time checked round key size and methods."]
+        #[doc = "\n- Key size: `"]
+        #[doc = stringify!($key_size)]
+        #[doc = " bytes`\n- Number of 32-bit words in the key: `"]
+        #[doc = stringify!($n_keywords)]
+        #[doc = "`\n- Number of round keys: `"]
+        #[doc = stringify!($n_round_keys)]
+        #[doc = "`"]
         pub struct $name {
             /// Original cipher key.
             pub key: [u8; $key_size],
@@ -57,8 +99,8 @@ macro_rules! define_aes_key_type {
 }
 
 define_aes_key_type!(Key128, 16, 4, 11);
-// define_aes_key_type!(Key192, 24, 6, 13);
-// define_aes_key_type!(Key256, 32, 8, 15);
+define_aes_key_type!(Key192, 24, 6, 13);
+define_aes_key_type!(Key256, 32, 8, 15);
 
 /// Round constants used in the key expansion process. These are derived from
 /// powers of 2 in the finite field GF(2^8).
