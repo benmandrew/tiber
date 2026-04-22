@@ -1,41 +1,23 @@
 //! AES key routines
 use crate::sbox;
 
-const N_KEYWORDS: usize = 4;
+/// AES key structure and key expansion routines.
+pub struct Key<const KEY_SIZE: usize, const N_KEYWORDS: usize, const N_ROUND_KEYS: usize> {
+    /// The raw key bytes.
+    pub key: [u8; KEY_SIZE],
 
-enum AESType {
-    AES128 = 0,
-    AES192 = 1,
-    AES256 = 2,
+    pub round_keys: [u32; 4 * N_ROUND_KEYS],
 }
 
-// type Key = [u32; N_KEYWORDS];
+/// Type alias for 128-bit AES keys.
+pub type Key128 = Key<16, 4, 11>;
+/// Type alias for 192-bit AES keys.
+pub type Key192 = Key<24, 6, 13>;
+/// Type alias for 256-bit AES keys.
+pub type Key256 = Key<32, 8, 15>;
 
-const fn n_keywords(aes_type: AESType) -> usize {
-    match aes_type {
-        AESType::AES128 => 4,
-        AESType::AES192 => 6,
-        AESType::AES256 => 8,
-    }
-}
-
-const fn n_round_keys(aes_type: AESType) -> usize {
-    match aes_type {
-        AESType::AES128 => 11,
-        AESType::AES192 => 13,
-        AESType::AES256 => 15,
-    }
-}
-
-struct Key {
-    aes_type: AESType,
-    key: Vec<u32>,
-    n_keywords: usize,
-    n_round_keys: usize,
-}
-
-impl Key {}
-
+/// Round constants used in the key expansion process. These are derived from
+/// powers of 2 in the finite field GF(2^8).
 static ROUND_CONSTANTS: [u32; 10] = [
     0x01 << 24,
     0x02 << 24,
@@ -49,16 +31,13 @@ static ROUND_CONSTANTS: [u32; 10] = [
     0x36 << 24,
 ];
 
-/// [word[1], word[2], word[3], word[0]]
+/// Rotates a 4-byte word left by one byte. For example, 0x01020304 becomes 0x02030401.
 fn rot_word(word: u32) -> u32 {
     let top_byte = word >> 24;
     (word << 8) | top_byte
 }
 
-/// sbox::S_BOX[word[0] as usize]
-/// sbox::S_BOX[word[1] as usize]
-/// sbox::S_BOX[word[2] as usize]
-/// sbox::S_BOX[word[3] as usize]
+/// Applies the S-box to each byte of the word.
 fn sub_word(word: u32) -> u32 {
     let b0 = sbox::S_BOX[((word >> 24) & 0xff) as usize] as u32;
     let b1 = sbox::S_BOX[((word >> 16) & 0xff) as usize] as u32;
@@ -67,19 +46,27 @@ fn sub_word(word: u32) -> u32 {
     (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
 }
 
-fn expand_key(key: &Key) -> Vec<u32> {
-    let mut w: Vec<u32> = Vec::with_capacity(4 * key.n_round_keys);
-    for i in 0..key.n_keywords {
-        w.push(key.key[i]);
+/// Expands the cipher key into a key schedule.
+fn expand_key<const KEY_SIZE: usize, const N_KEYWORDS: usize, const N_ROUND_KEYS: usize>(
+    key: &Key<KEY_SIZE, N_KEYWORDS, N_ROUND_KEYS>,
+) -> Vec<u32> {
+    let mut w: Vec<u32> = Vec::with_capacity(4 * N_ROUND_KEYS);
+    for i in 0..N_KEYWORDS {
+        w.push(u32::from_be_bytes([
+            key.key[i * 4],
+            key.key[i * 4 + 1],
+            key.key[i * 4 + 2],
+            key.key[i * 4 + 3],
+        ]));
     }
-    for i in key.n_keywords..4 * key.n_round_keys {
+    for i in N_KEYWORDS..4 * N_ROUND_KEYS {
         let mut tmp = w[i - 1];
-        if i % key.n_keywords == 0 {
-            tmp = sub_word(rot_word(tmp)) ^ ROUND_CONSTANTS[i / key.n_keywords - 1];
-        } else if key.n_keywords > 6 && i % key.n_keywords == 4 {
+        if i % N_KEYWORDS == 0 {
+            tmp = sub_word(rot_word(tmp)) ^ ROUND_CONSTANTS[i / N_KEYWORDS - 1];
+        } else if N_KEYWORDS > 6 && i % N_KEYWORDS == 4 {
             tmp = sub_word(tmp);
         }
-        w.push(w[i - key.n_keywords] ^ tmp);
+        w.push(w[i - N_KEYWORDS] ^ tmp);
     }
     w
 }
@@ -126,12 +113,7 @@ mod tests {
         for chunk in key_bytes.chunks(4) {
             key_words.push(u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
         }
-        let key = Key {
-            aes_type: AESType::AES128,
-            key: key_words.clone(),
-            n_keywords: 4,
-            n_round_keys: 11,
-        };
+        let key = Key128 { key: key_bytes };
         let expanded = expand_key(&key);
         let expected_hex = "
             00000000 00000000 00000000 00000000
