@@ -1,20 +1,49 @@
 //! AES key routines
 use crate::sbox;
 
-/// AES key structure and key expansion routines.
-pub struct Key<const KEY_SIZE: usize, const N_KEYWORDS: usize, const N_ROUND_KEYS: usize> {
-    /// The raw key bytes.
-    pub key: [u8; KEY_SIZE],
-
-    pub round_keys: [u32; 4 * N_ROUND_KEYS],
+macro_rules! define_aes_key_type {
+    ($name:ident, $key_size:expr, $n_keywords:expr, $n_round_keys:expr) => {
+        /// Macro to define AES Key types with compile-time checked round key size and methods.
+        pub struct $name {
+            /// Original cipher key.
+            pub key: [u8; $key_size],
+            /// Expanded round keys derived from the cipher key.
+            pub round_keys: [u32; 4 * $n_round_keys],
+        }
+        impl $name {
+            /// Creates a new AES key instance and performs key expansion to generate round keys.
+            pub fn new(key: [u8; $key_size]) -> Self {
+                let round_keys = Self::expand_key(&key);
+                Self { key, round_keys }
+            }
+            fn expand_key(key: &[u8; $key_size]) -> [u32; 4 * $n_round_keys] {
+                let mut w = [0u32; 4 * $n_round_keys];
+                for i in 0..$n_keywords {
+                    w[i] = u32::from_be_bytes([
+                        key[i * 4],
+                        key[i * 4 + 1],
+                        key[i * 4 + 2],
+                        key[i * 4 + 3],
+                    ]);
+                }
+                for i in $n_keywords..4 * $n_round_keys {
+                    let mut tmp = w[i - 1];
+                    if i % $n_keywords == 0 {
+                        tmp = sub_word(rot_word(tmp)) ^ ROUND_CONSTANTS[i / $n_keywords - 1];
+                    } else if $n_keywords > 6 && i % $n_keywords == 4 {
+                        tmp = sub_word(tmp);
+                    }
+                    w[i] = w[i - $n_keywords] ^ tmp;
+                }
+                w
+            }
+        }
+    };
 }
 
-/// Type alias for 128-bit AES keys.
-pub type Key128 = Key<16, 4, 11>;
-/// Type alias for 192-bit AES keys.
-pub type Key192 = Key<24, 6, 13>;
-/// Type alias for 256-bit AES keys.
-pub type Key256 = Key<32, 8, 15>;
+define_aes_key_type!(Key128, 16, 4, 11);
+define_aes_key_type!(Key192, 24, 6, 13);
+define_aes_key_type!(Key256, 32, 8, 15);
 
 /// Round constants used in the key expansion process. These are derived from
 /// powers of 2 in the finite field GF(2^8).
@@ -44,31 +73,6 @@ fn sub_word(word: u32) -> u32 {
     let b2 = sbox::S_BOX[((word >> 8) & 0xff) as usize] as u32;
     let b3 = sbox::S_BOX[(word & 0xff) as usize] as u32;
     (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
-}
-
-/// Expands the cipher key into a key schedule.
-fn expand_key<const KEY_SIZE: usize, const N_KEYWORDS: usize, const N_ROUND_KEYS: usize>(
-    key: &Key<KEY_SIZE, N_KEYWORDS, N_ROUND_KEYS>,
-) -> Vec<u32> {
-    let mut w: Vec<u32> = Vec::with_capacity(4 * N_ROUND_KEYS);
-    for i in 0..N_KEYWORDS {
-        w.push(u32::from_be_bytes([
-            key.key[i * 4],
-            key.key[i * 4 + 1],
-            key.key[i * 4 + 2],
-            key.key[i * 4 + 3],
-        ]));
-    }
-    for i in N_KEYWORDS..4 * N_ROUND_KEYS {
-        let mut tmp = w[i - 1];
-        if i % N_KEYWORDS == 0 {
-            tmp = sub_word(rot_word(tmp)) ^ ROUND_CONSTANTS[i / N_KEYWORDS - 1];
-        } else if N_KEYWORDS > 6 && i % N_KEYWORDS == 4 {
-            tmp = sub_word(tmp);
-        }
-        w.push(w[i - N_KEYWORDS] ^ tmp);
-    }
-    w
 }
 
 #[cfg(test)]
@@ -108,13 +112,8 @@ mod tests {
     #[test]
     fn test_expand_key_128bit_zero() {
         // 128-bit zero key
-        let key_bytes = [0u8; 16];
-        let mut key_words = Vec::with_capacity(4);
-        for chunk in key_bytes.chunks(4) {
-            key_words.push(u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-        }
-        let key = Key128 { key: key_bytes };
-        let expanded = expand_key(&key);
+        let key = Key128::new([0u8; 16]);
+        let expanded = &key.round_keys;
         let expected_hex = "
             00000000 00000000 00000000 00000000
             62636363 62636363 62636363 62636363
