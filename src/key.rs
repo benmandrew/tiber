@@ -145,8 +145,7 @@ mod tests {
             b1d4d8e2 8a7db9da 1d7bb3de 4c664941
             b4ef5bcb 3e92e211 23e951cf 6f8f188e
         "
-        .replace('\n', "")
-        .replace(' ', "");
+        .replace(['\n', ' '], "");
         let expected: Vec<[u8; 4]> = expected_hex
             .as_bytes()
             .chunks(8)
