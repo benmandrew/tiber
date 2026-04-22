@@ -1,4 +1,5 @@
 //! AES decryption routines.
+use crate::key::Key128;
 use crate::sbox;
 
 /// Applies the inverse S-box to each byte of the state.
@@ -29,6 +30,8 @@ pub fn inv_shift_rows(state: &mut [u8; 16]) {
     state[15] = temp[3];
 }
 
+/// Multiplies two bytes in the finite field GF(2^8) using the irreducible
+/// polynomial x^8 + x^4 + x^3 + x + 1.
 fn mul(x: u8, y: u8) -> u8 {
     let mut r = 0u8;
     let mut a = x;
@@ -65,24 +68,24 @@ pub fn inv_mix_columns(state: &mut [u8; 16]) {
 /// Transformation of the state in which a round key is combined with the
 /// state by applying the bitwise XOR operation. Each round key consists of
 /// four words from the key schedule.
-pub fn inv_add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
+pub fn inv_add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
     for i in 0..16 {
-        state[i] ^= round_key[i];
+        state[i] ^= round_key[i / 4][i % 4];
     }
 }
 
 /// AES decryption routine.
-pub fn decrypt(state: &mut [u8; 16], round_keys: &[[u8; 16]; 11]) {
-    inv_add_round_key(state, &round_keys[10]);
+pub fn decrypt(state: &mut [u8; 16], key: &Key128) {
+    inv_add_round_key(state, &key.get_round_key(key.n_round_keys - 1));
     inv_shift_rows(state);
     inv_sub_bytes(state);
-    for round in (1..10).rev() {
-        inv_add_round_key(state, &round_keys[round]);
+    for round in (1..key.n_round_keys - 1).rev() {
+        inv_add_round_key(state, &key.get_round_key(round));
         inv_mix_columns(state);
         inv_shift_rows(state);
         inv_sub_bytes(state);
     }
-    inv_add_round_key(state, &round_keys[0]);
+    inv_add_round_key(state, &key.get_round_key(0));
 }
 
 #[cfg(test)]
@@ -159,7 +162,7 @@ mod tests {
     #[test]
     fn test_inv_add_round_key_identity() {
         let mut state = [0u8; 16];
-        let round_key = [0u8; 16];
+        let round_key = [[0u8; 4]; 4];
         inv_add_round_key(&mut state, &round_key);
         assert_eq!(state, [0u8; 16]);
     }
@@ -167,7 +170,7 @@ mod tests {
     #[test]
     fn test_inv_add_round_key_patterned() {
         let mut state = [1u8; 16];
-        let round_key = [2u8; 16];
+        let round_key = [[2u8; 4]; 4];
         inv_add_round_key(&mut state, &round_key);
         assert_eq!(state, [3u8; 16]);
     }

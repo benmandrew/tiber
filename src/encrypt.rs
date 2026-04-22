@@ -1,5 +1,7 @@
 //! AES encryption routines.
+use crate::key::Key128;
 use crate::sbox;
+use crate::util;
 
 /// Applies the S-box to each byte of the state.
 pub fn sub_bytes(state: &mut [u8; 16]) {
@@ -33,34 +35,63 @@ pub fn shift_rows(state: &mut [u8; 16]) {
 /// Transformation of the state that multiplies each of the four columns of
 /// the state by a single fixed matrix.
 pub fn mix_columns(state: &mut [u8; 16]) {
-    let temp = *state;
-    state[0] = temp[0] ^ temp[4] ^ temp[8] ^ temp[12];
-    state[1] = temp[1] ^ temp[5] ^ temp[9] ^ temp[13];
-    state[2] = temp[2] ^ temp[6] ^ temp[10] ^ temp[14];
-    state[3] = temp[3] ^ temp[7] ^ temp[11] ^ temp[15];
+    // AES MixColumns transformation
+    fn xtime(x: u8) -> u8 {
+        (x << 1) ^ if x & 0x80 != 0 { 0x1b } else { 0 }
+    }
+    for c in 0..4 {
+        let i = c * 4;
+        let s0 = state[i];
+        let s1 = state[i + 1];
+        let s2 = state[i + 2];
+        let s3 = state[i + 3];
+        state[i] = xtime(s0) ^ xtime(s1) ^ s1 ^ s2 ^ s3;
+        state[i + 1] = s0 ^ xtime(s1) ^ xtime(s2) ^ s2 ^ s3;
+        state[i + 2] = s0 ^ s1 ^ xtime(s2) ^ xtime(s3) ^ s3;
+        state[i + 3] = xtime(s0) ^ s0 ^ s1 ^ s2 ^ xtime(s3);
+    }
 }
 
 /// Transformation of the state in which a round key is combined with the
 /// state by applying the bitwise XOR operation. Each round key consists of
 /// four words from the key schedule.
-pub fn add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
+pub fn add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
     for i in 0..16 {
-        state[i] ^= round_key[i];
+        state[i] ^= round_key[i / 4][i % 4];
     }
 }
 
 /// AES encryption routine.
-pub fn encrypt(state: &mut [u8; 16], round_keys: &[[u8; 16]; 11]) {
-    add_round_key(state, &round_keys[0]);
-    for round_key in round_keys.iter().skip(1) {
+pub fn encrypt(state: &mut [u8; 16], key: &Key128) {
+    util::print_hex_array(&state);
+    add_round_key(state, &key.get_round_key(0));
+    print!("AddRoundKey: ");
+    util::print_hex_array(&state);
+    for round in 1..key.n_round_keys - 1 {
+        println!(" Round {}", round);
         sub_bytes(state);
+        print!("SubBytes:    ");
+        util::print_hex_array(&state);
         shift_rows(state);
+        print!("ShiftRows:   ");
+        util::print_hex_array(&state);
         mix_columns(state);
-        add_round_key(state, round_key);
+        print!("MixColumns:  ");
+        util::print_hex_array(&state);
+        add_round_key(state, &key.get_round_key(round));
+        print!("AddRoundKey: ");
+        util::print_hex_array(&state);
     }
+    println!(" Final Round");
     sub_bytes(state);
+    print!("SubBytes:    ");
+    util::print_hex_array(&state);
     shift_rows(state);
-    add_round_key(state, &round_keys[10]);
+    print!("ShiftRows:   ");
+    util::print_hex_array(&state);
+    add_round_key(state, &key.get_round_key(key.n_round_keys - 1));
+    print!("AddRoundKey: ");
+    util::print_hex_array(&state);
 }
 
 #[cfg(test)]
@@ -124,7 +155,7 @@ mod tests {
     #[test]
     fn test_add_round_key_identity() {
         let mut state = [0u8; 16];
-        let round_key = [0u8; 16];
+        let round_key = [[0u8; 4]; 4];
         add_round_key(&mut state, &round_key);
         assert_eq!(state, [0u8; 16]);
     }
@@ -132,7 +163,7 @@ mod tests {
     #[test]
     fn test_add_round_key_patterned() {
         let mut state = [1u8; 16];
-        let round_key = [2u8; 16];
+        let round_key = [[2u8; 4]; 4];
         add_round_key(&mut state, &round_key);
         assert_eq!(state, [3u8; 16]);
     }
