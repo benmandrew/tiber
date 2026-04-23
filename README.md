@@ -24,9 +24,9 @@ $ echo 'b1a4cd8fc4d3544b5c51623be45f1fc9' | tiber --input-hex --key aes-key decr
 Hello, world!
 ```
 
-### Subroutines
+### Individual Steps
 
-Apply a particular subroutine of the AES algorithm: one of `sub-bytes`, `shift-rows`, `mix-columns`, or `add-round-key`.
+Apply a particular step of the AES algorithm: one of `sub-bytes`, `shift-rows`, `mix-columns`, or `add-round-key`.
 
 ```sh
 $ echo 'Hello, world!' | ./target/release/tiber --key aes-key encrypt shift-rows
