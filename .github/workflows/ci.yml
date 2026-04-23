@@ -31,8 +31,18 @@ jobs:
         with:
           toolchain: stable
           override: true
+      - name: Cache cargo bin
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-bin-wasm-pack-${{ hashFiles('wasm/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-bin-wasm-pack-
       - name: Install wasm-pack
-        run: cargo install wasm-pack
+        run: |
+          if ! command -v wasm-pack > /dev/null; then
+            cargo install wasm-pack
+          fi
       - name: Build
         run: make
       - name: Test
