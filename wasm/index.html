@@ -1,66 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Tiber Visualizer</title>
-  <style>
-    body { font-family: sans-serif; max-width: 700px; margin: 2em auto; }
-    textarea, input { width: 100%; margin-bottom: 1em; }
-    .rounds { margin-top: 2em; }
-    .round { margin-bottom: 1em; padding: 0.5em; background: #f7f7f7; border-radius: 4px; }
-  </style>
+<meta charset="UTF-8">
+<title>Tiber Visualizer</title>
+<link rel="stylesheet" href="src/style.css">
 </head>
 <body>
-  <h1>Tiber AES Visualizer</h1>
-  <label>Key (hex, 16 bytes):<input id="key" maxlength="32"></label>
-  <label>Plaintext (hex, 16 bytes):<input id="plaintext" maxlength="32"></label>
-  <button id="encrypt">Show Encryption Rounds</button>
-  <button id="decrypt">Show Decryption Rounds</button>
-  <div class="rounds" id="rounds"></div>
-  <script type="module">
-    import init, { encrypt_rounds, decrypt_rounds } from './pkg/tiber_wasm.js';
-    await init();
-    function hexToBytes(hex) {
-      if (hex.length % 2 !== 0) return null;
-      const bytes = [];
-      for (let i = 0; i < hex.length; i += 2) {
-        bytes.push(parseInt(hex.slice(i, i + 2), 16));
-      }
-      return new Uint8Array(bytes);
-    }
-    function bytesToHex(bytes) {
-      return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-    function showRounds(rounds) {
-      const div = document.getElementById('rounds');
-      div.innerHTML = '';
-      rounds.forEach((state, i) => {
-        const el = document.createElement('div');
-        el.className = 'round';
-        el.textContent = `Round ${i}: ${bytesToHex(state)}`;
-        div.appendChild(el);
-      });
-    }
-    document.getElementById('encrypt').onclick = () => {
-      const key = hexToBytes(document.getElementById('key').value);
-      const pt = hexToBytes(document.getElementById('plaintext').value);
-      if (!key || !pt || key.length !== 16 || pt.length !== 16) {
-        alert('Key and plaintext must be 16 bytes (32 hex chars)');
-        return;
-      }
-      const rounds = encrypt_rounds(pt, key);
-      showRounds(rounds);
-    };
-    document.getElementById('decrypt').onclick = () => {
-      const key = hexToBytes(document.getElementById('key').value);
-      const ct = hexToBytes(document.getElementById('plaintext').value);
-      if (!key || !ct || key.length !== 16 || ct.length !== 16) {
-        alert('Key and ciphertext must be 16 bytes (32 hex chars)');
-        return;
-      }
-      const rounds = decrypt_rounds(ct, key);
-      showRounds(rounds);
-    };
-  </script>
+<h1>Tiber AES Visualizer</h1>
+
+<label for="key">Key (hex, 16 bytes):</label>
+<input id="key" type="text" maxlength="47" value="00000000000000000000000000000000">
+
+<label for="plaintext">Plaintext (16 bytes):</label>
+<div class="radio-group">
+  <label><input type="radio" name="pt-format" value="ascii" checked> ASCII</label>
+  <label><input type="radio" name="pt-format" value="hex"> Hex</label>
+</div>
+<input id="plaintext" type="text" value="Hello, world!">
+
+<button id="encrypt">Show Encryption Rounds</button>
+<button id="decrypt">Show Decryption Rounds</button>
+<div class="rounds" id="rounds"></div>
+
+<script type="module" src="src/main.js"></script>
 </body>
 </html>
