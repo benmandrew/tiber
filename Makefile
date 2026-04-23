@@ -19,4 +19,4 @@ build-wasm:
 		printf '\033[1;31m[ERROR]\033[0m wasm-pack not found. Please run: cargo install wasm-pack\n' ; \
 		exit 1 ; \
 	}
-	@cd wasm && wasm-pack build --release --target web
+	@cd wasm && wasm-pack --log-level warn build --release --target web

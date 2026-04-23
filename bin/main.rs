@@ -1,14 +1,11 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use std::fs;
 use std::io::{self, Read};
-use tiber::{decrypt, encrypt, key::Key128, util};
+use tiber::{decrypt, encrypt, key::Key128};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// Path to key file (16 bytes)
-    #[arg(short, long)]
-    key: String,
     /// Input (16 bytes, ASCII or hex). If not provided, reads from stdin.
     #[arg(short, long)]
     input: Option<String>,
@@ -25,115 +22,122 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Encrypt input
-    Encrypt(EncryptCmd),
+    Encrypt {
+        /// Path to key file (16 bytes)
+        #[arg(short, long)]
+        key: String,
+    },
     /// Decrypt input
-    Decrypt(DecryptCmd),
-}
-
-#[derive(Args)]
-struct EncryptCmd {
-    #[command(subcommand)]
-    subcmd: Option<EncryptSubroutine>,
-}
-
-#[derive(Subcommand)]
-enum EncryptSubroutine {
+    Decrypt {
+        /// Path to key file (16 bytes)
+        #[arg(short, long)]
+        key: String,
+    },
     /// Apply sub_bytes only
-    SubBytes,
+    SubBytes {
+        /// Apply inverse sub_bytes (for decryption)
+        #[arg(short, long, default_value_t = false)]
+        inverse: bool,
+    },
     /// Apply shift_rows only
-    ShiftRows,
+    ShiftRows {
+        /// Apply inverse shift_rows (for decryption)
+        #[arg(short, long, default_value_t = false)]
+        inverse: bool,
+    },
     /// Apply mix_columns only
-    MixColumns,
+    MixColumns {
+        /// Apply inverse mix_columns (for decryption)
+        #[arg(short, long, default_value_t = false)]
+        inverse: bool,
+    },
     /// Apply add_round_key for a given round
     AddRoundKey {
+        /// Path to key file (16 bytes)
+        #[arg(short, long)]
+        key: String,
+        /// Apply inverse add_round_key (for decryption)
+        #[arg(short, long, default_value_t = false)]
+        inverse: bool,
         /// Round number
-        round: usize,
-    },
-}
-
-#[derive(Args)]
-struct DecryptCmd {
-    #[command(subcommand)]
-    subcmd: Option<DecryptSubroutine>,
-}
-
-#[derive(Subcommand)]
-enum DecryptSubroutine {
-    /// Apply inv_sub_bytes only
-    SubBytes,
-    /// Apply inv_shift_rows only
-    ShiftRows,
-    /// Apply inv_mix_columns only
-    MixColumns,
-    /// Apply inv_add_round_key for a given round
-    AddRoundKey {
-        /// Round number
+        #[arg(short, long)]
         round: usize,
     },
 }
 
 fn main() {
     let cli = Cli::parse();
-    let key_bytes = fs::read(&cli.key).expect("Failed to read key file");
+    let mut state = get_input_bytes(cli.input.clone(), cli.input_hex);
+    match &cli.command {
+        Commands::Encrypt { key } => encrypt_command(key, &mut state),
+        Commands::Decrypt { key } => decrypt_command(key, &mut state),
+        Commands::SubBytes { inverse } => {
+            sub_bytes_command(*inverse, &mut state);
+        }
+        Commands::ShiftRows { inverse } => {
+            shift_rows_command(*inverse, &mut state);
+        }
+        Commands::MixColumns { inverse } => {
+            mix_columns_command(*inverse, &mut state);
+        }
+        Commands::AddRoundKey {
+            key,
+            inverse,
+            round,
+        } => {
+            add_round_key_command(key, *inverse, *round, &mut state);
+        }
+    }
+    print_state(&state, cli.output_hex);
+}
+
+fn encrypt_command(key_path: &str, state: &mut [u8; 16]) {
+    let key_bytes = fs::read(key_path).expect("Failed to read key file");
     assert_eq!(key_bytes.len(), 16, "Key must be 16 bytes");
-    let key = Key128::new(key_bytes.try_into().unwrap());
-    match cli.command {
-        Commands::Encrypt(cmd) => {
-            encrypt(cmd, &key, cli.input, cli.input_hex, cli.output_hex);
-        }
-        Commands::Decrypt(cmd) => {
-            decrypt(cmd, &key, cli.input, cli.input_hex, cli.output_hex);
-        }
+    let key = Key128::new(key_bytes.clone().try_into().unwrap());
+    encrypt::encrypt(state, &key);
+}
+
+fn decrypt_command(key_path: &str, state: &mut [u8; 16]) {
+    let key_bytes = fs::read(key_path).expect("Failed to read key file");
+    assert_eq!(key_bytes.len(), 16, "Key must be 16 bytes");
+    let key = Key128::new(key_bytes.clone().try_into().unwrap());
+    decrypt::decrypt(state, &key);
+}
+
+fn sub_bytes_command(inverse: bool, state: &mut [u8; 16]) {
+    if inverse {
+        decrypt::inv_sub_bytes(state);
+    } else {
+        encrypt::sub_bytes(state);
     }
 }
 
-fn encrypt(
-    cmd: EncryptCmd,
-    key: &Key128,
-    input: Option<String>,
-    input_hex: bool,
-    output_hex: bool,
-) {
-    let mut state = get_input_bytes(input, input_hex);
-    match cmd.subcmd {
-        Some(EncryptSubroutine::SubBytes) => encrypt::sub_bytes(&mut state),
-        Some(EncryptSubroutine::ShiftRows) => encrypt::shift_rows(&mut state),
-        Some(EncryptSubroutine::MixColumns) => encrypt::mix_columns(&mut state),
-        Some(EncryptSubroutine::AddRoundKey { round }) => {
-            let round_key = key.get_round_key(round);
-            encrypt::add_round_key(&mut state, &round_key);
-        }
-        None => encrypt::encrypt(&mut state, key),
-    }
-    if output_hex {
-        print_hex(&state);
+fn shift_rows_command(inverse: bool, state: &mut [u8; 16]) {
+    if inverse {
+        decrypt::inv_shift_rows(state);
     } else {
-        util::print_as_text(&state);
+        encrypt::shift_rows(state);
     }
 }
 
-fn decrypt(
-    cmd: DecryptCmd,
-    key: &Key128,
-    input: Option<String>,
-    input_hex: bool,
-    output_hex: bool,
-) {
-    let mut state = get_input_bytes(input, input_hex);
-    match cmd.subcmd {
-        Some(DecryptSubroutine::SubBytes) => decrypt::inv_sub_bytes(&mut state),
-        Some(DecryptSubroutine::ShiftRows) => decrypt::inv_shift_rows(&mut state),
-        Some(DecryptSubroutine::MixColumns) => decrypt::inv_mix_columns(&mut state),
-        Some(DecryptSubroutine::AddRoundKey { round }) => {
-            let round_key = key.get_round_key(round);
-            decrypt::inv_add_round_key(&mut state, &round_key);
-        }
-        None => decrypt::decrypt(&mut state, key),
-    }
-    if output_hex {
-        print_hex(&state);
+fn mix_columns_command(inverse: bool, state: &mut [u8; 16]) {
+    if inverse {
+        decrypt::inv_mix_columns(state);
     } else {
-        util::print_as_text(&state);
+        encrypt::mix_columns(state);
+    }
+}
+
+fn add_round_key_command(key_path: &str, inverse: bool, round: usize, state: &mut [u8; 16]) {
+    let key_bytes = fs::read(key_path).expect("Failed to read key file");
+    assert_eq!(key_bytes.len(), 16, "Key must be 16 bytes");
+    let key = Key128::new(key_bytes.clone().try_into().unwrap());
+    let round_key = key.get_round_key(round);
+    if inverse {
+        decrypt::inv_add_round_key(state, &round_key);
+    } else {
+        encrypt::add_round_key(state, &round_key);
     }
 }
 
@@ -162,18 +166,29 @@ fn get_input_bytes(input: Option<String>, input_hex: bool) -> [u8; 16] {
     arr
 }
 
-fn print_hex(bytes: &[u8; 16]) {
-    println!("{}", encode_hex(bytes));
+fn print_state(state: &[u8; 16], as_hex: bool) {
+    if as_hex {
+        print_as_hex(state);
+    } else {
+        print_as_text(state);
+    }
 }
 
-fn encode_hex(bytes: &[u8]) -> String {
+fn print_as_hex(bytes: &[u8; 16]) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut s = String::with_capacity(bytes.len() * 2);
     for &b in bytes {
         s.push(HEX[(b >> 4) as usize] as char);
         s.push(HEX[(b & 0xf) as usize] as char);
     }
-    s
+    println!("{}", s);
+}
+
+fn print_as_text(arr: &[u8; 16]) {
+    for byte in arr.iter() {
+        print!("{}", *byte as char);
+    }
+    println!();
 }
 
 fn decode_hex(s: &str) -> Result<Vec<u8>, String> {

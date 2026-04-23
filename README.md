@@ -9,9 +9,9 @@ AES is a symmetric block cipher. It is symmetric because it uses the same key to
 Full, end-to-end encryption of plaintext to ciphertext.
 
 ```sh
-$ cat aes-key
+$ cat aes.key
 -my-16-byte-key-
-$ echo 'Hello, world!' | tiber --output-hex --key aes-key encrypt
+$ echo 'Hello, world!' | tiber --output-hex encrypt --key aes.key
 b1a4cd8fc4d3544b5c51623be45f1fc9
 ```
 
@@ -20,7 +20,7 @@ b1a4cd8fc4d3544b5c51623be45f1fc9
 Full, end-to-end decryption of ciphertext to plaintext.
 
 ```sh
-$ echo 'b1a4cd8fc4d3544b5c51623be45f1fc9' | tiber --input-hex --key aes-key decrypt
+$ echo 'b1a4cd8fc4d3544b5c51623be45f1fc9' | tiber --input-hex decrypt --key aes.key
 Hello, world!
 ```
 
@@ -29,6 +29,6 @@ Hello, world!
 Apply a particular step of the AES algorithm: one of `sub-bytes`, `shift-rows`, `mix-columns`, or `add-round-key`.
 
 ```sh
-$ echo 'Hello, world!' | tiber --key aes-key encrypt shift-rows
+$ echo 'Hello, world!' | tiber shift-rows
 H,l or lo lw!e d
 ```
