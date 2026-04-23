@@ -29,6 +29,6 @@ Hello, world!
 Apply a particular step of the AES algorithm: one of `sub-bytes`, `shift-rows`, `mix-columns`, or `add-round-key`.
 
 ```sh
-$ echo 'Hello, world!' | ./target/release/tiber --key aes-key encrypt shift-rows
+$ echo 'Hello, world!' | tiber --key aes-key encrypt shift-rows
 H,l or lo lw!e d
 ```
