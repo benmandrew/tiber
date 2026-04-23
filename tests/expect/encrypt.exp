@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+# Test encryption CLI with a known key and input
+set timeout 5
+set keyfile "example.key"
+
+spawn ../../target/debug/tiber --input "Hello, world!" --output-hex encrypt --key $keyfile
+expect {
+    -re "b1a4cd8fc4d3544b5c51623be45f1fc9" { exit 0 }
+    timeout { puts "Timeout waiting for output"; exit 1 }
+    eof { puts "Unexpected EOF"; exit 1 }
+}
