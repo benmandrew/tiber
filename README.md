@@ -32,3 +32,9 @@ Apply a particular step of the AES algorithm: one of `sub-bytes`, `shift-rows`, 
 $ echo 'Hello, world!' | tiber shift-rows
 H,l or lo lw!e d
 ```
+
+## Build
+
+```sh
+$ make
+```
