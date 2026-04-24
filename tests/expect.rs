@@ -4,7 +4,7 @@ use std::process::Stdio;
 
 fn check_debug_build() {
     let output = Command::new("cargo")
-        .args(&["build", "--quiet", "--bin", "tiber"])
+        .args(["build", "--quiet", "--bin", "tiber"])
         .output()
         .expect("failed to build tiber binary");
     if !output.status.success() {

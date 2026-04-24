@@ -16,9 +16,9 @@ jobs:
           toolchain: stable
           override: true
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: make fmt-ci
       - name: Lint
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: make lint
       - name: Docs
         run: cargo doc --document-private-items
 

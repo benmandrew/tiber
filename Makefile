@@ -1,4 +1,4 @@
-.PHONY: build-native build-wasm
+.PHONY: build-native build-wasm fmt fmt-ci lint
 
 BOLD_CYAN := \033[1;36m
 RESET := \033[0m
@@ -20,3 +20,15 @@ build-wasm:
 		exit 1 ; \
 	}
 	@cd wasm && wasm-pack --log-level warn build --release --target web
+
+fmt:
+	$(call log,Formatting code)
+	@cargo fmt --all
+
+fmt-ci:
+	$(call log,Checking code formatting)
+	@cargo fmt --all -- --check
+
+lint:
+	$(call log,Running clippy linter)
+	@cargo clippy --all-targets --all-features -- -D warnings
