@@ -1,8 +1,11 @@
 //! AES decryption routines.
+//!
+//! This module implements the core AES decryption steps: [`inv_sub_bytes`], [`inv_shift_rows`],
+//! [`inv_mix_columns`], and [`inv_add_round_key`]. It also provides the main [`decrypt`] function that performs end-to-end decryption of a 16-byte ciphertext using a given key.
 use crate::key::AesKey;
-use crate::sbox;
+use crate::{encrypt, sbox};
 
-/// Applies the inverse S-box to each byte of the state.
+/// Applies the inverse S-box to each byte of the state. Inverse of the [`sub_bytes`](crate::encrypt::sub_bytes) step.
 pub fn inv_sub_bytes(state: &mut [u8; 16]) {
     for byte in state.iter_mut() {
         *byte = sbox::INV_S_BOX[*byte as usize];
@@ -65,16 +68,23 @@ pub fn inv_mix_columns(state: &mut [u8; 16]) {
     }
 }
 
-/// Transformation of the state in which a round key is combined with the
-/// state by applying the bitwise XOR operation. Each round key consists of
-/// four words from the key schedule.
+/// In the `inv_add_round_key` step, the subkey is combined with the state.
+///
+/// For each round, a subkey is derived from the main key using Rijndael's key
+/// schedule; each subkey is the same size as the state. The subkey is added
+/// by combining of the state with the corresponding byte of the subkey using
+/// bitwise XOR.
 pub fn inv_add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
-    for i in 0..16 {
-        state[i] ^= round_key[i / 4][i % 4];
-    }
+    encrypt::add_round_key(state, round_key);
 }
 
-/// AES decryption routine.
+/// End-to-end decryption of ciphertext to plaintext.
+///
+/// The `decrypt` function takes a 16-byte ciphertext and a key, and produces a
+/// 16-byte plaintext. The key is expanded into round keys using the key
+/// schedule, and the decryption process consists of an initial [`inv_add_round_key`]
+/// step, followed by a number of rounds (depending on the key size) of
+/// [`inv_sub_bytes`], [`inv_shift_rows`], [`inv_mix_columns`], and [`inv_add_round_key`].
 pub fn decrypt<K: AesKey>(state: &mut [u8; 16], key: &K) {
     inv_add_round_key(state, &key.get_round_key(key.n_round_keys() - 1));
     inv_shift_rows(state);

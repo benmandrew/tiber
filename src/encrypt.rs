@@ -1,16 +1,41 @@
 //! AES encryption routines.
+//!
+//! This module implements the core AES encryption steps: [`sub_bytes`], [`shift_rows`],
+//! [`mix_columns`], and [`add_round_key`]. It also provides the [`encrypt`] function
+//! which performs the full encryption process using a given key.
 use crate::key::AesKey;
 use crate::sbox;
 
-/// Applies the S-box to each byte of the state.
+/// In the [`sub_bytes`] step, each byte *a<sub>i,j</sub>* in the state array is replaced with
+/// a *S(a<sub>i,j</sub>)* using an 8-bit substitution box.
+///
+/// Before round 0, the state array is simply the plaintext/input. This
+/// operation provides the non-linearity in the cipher. The S-box used is
+/// derived from the multiplicative inverse over *GF(2<sup>8</sup>)*, known to have good
+/// non-linearity properties. To avoid attacks based on simple algebraic
+/// properties, the S-box is constructed by combining the inverse function with
+/// an invertible affine transformation. The S-box is also chosen to avoid any
+/// fixed points (and so is a derangement), i.e., *S(a<sub>i,j</sub>)* ≠ *a<sub>i,j</sub>*, and also any
+/// opposite fixed points, i.e., *S(a<sub>i,j</sub>)* ⊕ *a<sub>i,j</sub>* ≠ FF<sub>16</sub>. While performing the
+/// decryption, the `inv_sub_bytes` step (the inverse of `sub_bytes`) is used, which
+/// requires first taking the inverse of the affine transformation and then
+/// finding the multiplicative inverse.
 pub fn sub_bytes(state: &mut [u8; 16]) {
     for byte in state.iter_mut() {
         *byte = sbox::S_BOX[*byte as usize];
     }
 }
 
-/// Invertible, non-linear transformation of the state in which a substitution
-/// table, called an S-box, is applied independently to each byte in the state.
+/// The `shift_rows` step operates on the rows of the state; it cyclically
+/// shifts the bytes in each row by a certain offset.
+///
+/// For AES, the first row is left unchanged. Each byte of the second row is
+/// shifted one to the left. Similarly, the third and fourth rows are shifted
+/// by offsets of two and three respectively. In this way, each column of the
+/// output state of the `shift_rows` step is composed of bytes from each column
+/// of the input state. The importance of this step is to avoid the columns
+/// being encrypted independently, in which case AES would degenerate into four
+/// independent block ciphers.
 pub fn shift_rows(state: &mut [u8; 16]) {
     let temp = *state;
     state[0] = temp[0];
@@ -31,8 +56,22 @@ pub fn shift_rows(state: &mut [u8; 16]) {
     state[15] = temp[11];
 }
 
-/// Transformation of the state that multiplies each of the four columns of
-/// the state by a single fixed matrix.
+/// In the MixColumns step, the four bytes of each column of the state are
+/// combined using an invertible linear transformation.
+///
+/// The MixColumns function takes four bytes as input and outputs four bytes,
+/// where each input byte affects all four output bytes. Together with
+/// [`shift_rows`], `mix_columns` provides diffusion in the cipher. During this
+/// operation, each column is transformed using a fixed matrix. Matrix
+/// multiplication is composed of multiplication and addition of the entries.
+/// Entries are bytes treated as coefficients of polynomial of order
+/// *x<sup>7</sup>*. Addition is simply XOR. Multiplication is modulo
+/// irreducible polynomial
+/// *x<sup>8</sup> + x<sup>4</sup> + x<sup>3</sup> + x + 1*. If processed bit
+/// by bit, then, after shifting, a conditional XOR with *1B<sub>16</sub>*
+/// should be performed if the shifted value is larger than *FF<sub>16</sub>*
+/// (overflow must be corrected by subtraction of generating polynomial). These
+/// are special cases of the usual multiplication in *GF(2<sup>8</sup>)*.
 pub fn mix_columns(state: &mut [u8; 16]) {
     // AES MixColumns transformation
     fn xtime(x: u8) -> u8 {
@@ -51,16 +90,25 @@ pub fn mix_columns(state: &mut [u8; 16]) {
     }
 }
 
-/// Transformation of the state in which a round key is combined with the
-/// state by applying the bitwise XOR operation. Each round key consists of
-/// four words from the key schedule.
+/// In the `add_round_key` step, the subkey is combined with the state.
+///
+/// For each round, a subkey is derived from the main key using Rijndael's key
+/// schedule; each subkey is the same size as the state. The subkey is added
+/// by combining of the state with the corresponding byte of the subkey using
+/// bitwise XOR.
 pub fn add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
     for i in 0..16 {
         state[i] ^= round_key[i / 4][i % 4];
     }
 }
 
-/// AES encryption routine.
+/// End-to-end encryption of plaintext to ciphertext.
+///
+/// The `encrypt` function takes a 16-byte plaintext and a key, and produces a
+/// 16-byte ciphertext. The key is expanded into round keys using the key
+/// schedule, and the encryption process consists of an initial [`add_round_key`]
+/// step, followed by a number of rounds (depending on the key size) of
+/// [`sub_bytes`], [`shift_rows`], [`mix_columns`], and [`add_round_key`].
 pub fn encrypt<K: AesKey>(state: &mut [u8; 16], key: &K) {
     add_round_key(state, &key.get_round_key(0));
     for round in 1..key.n_round_keys() - 1 {
