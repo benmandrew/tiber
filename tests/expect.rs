@@ -8,7 +8,10 @@ fn check_debug_build() {
         .output()
         .expect("failed to build tiber binary");
     if !output.status.success() {
-        panic!("Failed to build tiber binary: {}", String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "Failed to build tiber binary: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 

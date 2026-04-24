@@ -43,6 +43,8 @@ jobs:
           if ! command -v wasm-pack > /dev/null; then
             cargo install wasm-pack
           fi
+      - name: Install expect
+        run: sudo apt-get update && sudo apt-get install -y expect
       - name: Build
         run: make
       - name: Test
