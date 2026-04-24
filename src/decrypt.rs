@@ -1,4 +1,4 @@
-//! AES decryption routines.
+//! Convert ciphertext to plaintext using AES decryption steps.
 //!
 //! This module implements the core AES decryption steps: [`inv_sub_bytes`], [`inv_shift_rows`],
 //! [`inv_mix_columns`], and [`inv_add_round_key`]. It also provides the main [`decrypt`] function that performs end-to-end decryption of a 16-byte ciphertext using a given key.

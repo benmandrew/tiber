@@ -1,4 +1,4 @@
-//! AES encryption routines.
+//! Convert plaintext to ciphertext using AES encryption steps.
 //!
 //! This module implements the core AES encryption steps: [`sub_bytes`], [`shift_rows`],
 //! [`mix_columns`], and [`add_round_key`]. It also provides the [`encrypt`] function
@@ -20,6 +20,8 @@ use crate::sbox;
 /// decryption, the `inv_sub_bytes` step (the inverse of `sub_bytes`) is used, which
 /// requires first taking the inverse of the affine transformation and then
 /// finding the multiplicative inverse.
+///
+/// - [Wikipedia](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard#The_SubBytes_step)
 pub fn sub_bytes(state: &mut [u8; 16]) {
     for byte in state.iter_mut() {
         *byte = sbox::S_BOX[*byte as usize];
@@ -36,6 +38,8 @@ pub fn sub_bytes(state: &mut [u8; 16]) {
 /// of the input state. The importance of this step is to avoid the columns
 /// being encrypted independently, in which case AES would degenerate into four
 /// independent block ciphers.
+///
+/// - [Wikipedia](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard#The_ShiftRows_step)
 pub fn shift_rows(state: &mut [u8; 16]) {
     let temp = *state;
     state[0] = temp[0];
@@ -72,6 +76,8 @@ pub fn shift_rows(state: &mut [u8; 16]) {
 /// should be performed if the shifted value is larger than *FF<sub>16</sub>*
 /// (overflow must be corrected by subtraction of generating polynomial). These
 /// are special cases of the usual multiplication in *GF(2<sup>8</sup>)*.
+///
+/// - [Wikipedia](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard#The_MixColumns_step)
 pub fn mix_columns(state: &mut [u8; 16]) {
     // AES MixColumns transformation
     fn xtime(x: u8) -> u8 {
@@ -96,6 +102,8 @@ pub fn mix_columns(state: &mut [u8; 16]) {
 /// schedule; each subkey is the same size as the state. The subkey is added
 /// by combining of the state with the corresponding byte of the subkey using
 /// bitwise XOR.
+///
+/// - [Wikipedia](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard#The_AddRoundKey_Step)
 pub fn add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
     for i in 0..16 {
         state[i] ^= round_key[i / 4][i % 4];
@@ -109,6 +117,8 @@ pub fn add_round_key(state: &mut [u8; 16], round_key: &[[u8; 4]; 4]) {
 /// schedule, and the encryption process consists of an initial [`add_round_key`]
 /// step, followed by a number of rounds (depending on the key size) of
 /// [`sub_bytes`], [`shift_rows`], [`mix_columns`], and [`add_round_key`].
+///
+/// - [Wikipedia](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard#High-level_description_of_the_algorithm)
 pub fn encrypt<K: AesKey>(state: &mut [u8; 16], key: &K) {
     add_round_key(state, &key.get_round_key(0));
     for round in 1..key.n_round_keys() - 1 {

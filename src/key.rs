@@ -1,4 +1,11 @@
-//! AES key routines
+//! AES key types and key expansion logic.
+//!
+//! This module defines the `AesKey` trait, which is implemented by the
+//! `Key128`, `Key192`, and `Key256` structs representing AES-128, AES-192, and
+//! AES-256 keys respectively. Each key type includes methods for key expansion
+//! to generate round keys used in the encryption and decryption processes.
+//!
+//! - [Wikipedia](https://en.wikipedia.org/wiki/AES_key_schedule)
 use crate::sbox;
 
 /// Trait for AES key types (Key128, Key192, Key256)
@@ -39,11 +46,11 @@ impl AesKey for Key256 {
 macro_rules! define_aes_key_type {
     ($name:ident, $key_size:expr, $n_keywords:expr, $n_round_keys:expr) => {
         #[doc = "AES Key type with compile-time checked round key size and methods."]
-        #[doc = "\n- Key size: `"]
+        #[doc = "\n- Key size (bytes): `"]
         #[doc = stringify!($key_size)]
-        #[doc = " bytes`\n- Number of 32-bit words in the key: `"]
+        #[doc = "`\n- Key size (32-bit words): `"]
         #[doc = stringify!($n_keywords)]
-        #[doc = "`\n- Number of round keys: `"]
+        #[doc = "`\n- Round keys: `"]
         #[doc = stringify!($n_round_keys)]
         #[doc = "`"]
         pub struct $name {
