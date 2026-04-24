@@ -6,21 +6,33 @@
 <link rel="stylesheet" href="src/style.css">
 </head>
 <body>
-<h1>Tiber AES Visualizer</h1>
+<h1>Tiber AES Visualiser</h1>
 
-<label for="key">Key (hex, 16 bytes):</label>
-<input id="key" type="text" maxlength="47" value="00000000000000000000000000000000">
-
-<label for="plaintext">Plaintext (16 bytes):</label>
+<label for="plaintext">Plaintext (16 bytes, zero-padded):</label>
 <div class="radio-group">
   <label><input type="radio" name="pt-format" value="ascii" checked> ASCII</label>
   <label><input type="radio" name="pt-format" value="hex"> Hex</label>
 </div>
 <input id="plaintext" type="text" value="Hello, world!">
 
-<button id="encrypt">Show Encryption Rounds</button>
-<button id="decrypt">Show Decryption Rounds</button>
-<div class="rounds" id="rounds"></div>
+<label for="key">Key (hex, 16 bytes, zero-padded):</label>
+<input id="key" type="text" maxlength="47" value="c0ffeec0ffeedeadbeefc0ffeec0ffee">
+
+<div class="round">
+<label for="ciphertext">Ciphertext (hex):</label>
+<pre id="ciphertext"></pre>
+</div>
+
+<div class="rounds-columns">
+  <div>
+    <h2>Encryption Steps ↓</h2>
+    <div class="rounds" id="enc-rounds"></div>
+  </div>
+  <div>
+    <h2>Decryption Steps ↑</h2>
+    <div class="rounds" id="dec-rounds"></div>
+  </div>
+</div>
 
 <script type="module" src="src/main.js"></script>
 </body>

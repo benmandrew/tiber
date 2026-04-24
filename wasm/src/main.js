@@ -11,9 +11,7 @@ function formatHex(raw) {
 
 function enableHexFormatting(input) {
   if (input._hexHandlers) return;
-
   input.classList.add('hex');
-
   const keydownHandler = (e) => {
     if (e.key !== 'Backspace') return;
     const pos = input.selectionStart;
@@ -30,7 +28,6 @@ function enableHexFormatting(input) {
       input.setSelectionRange(newPos, newPos);
     }
   };
-
   const inputHandler = () => {
     const cursor = input.selectionStart;
     const rawBeforeCursor = input.value
@@ -42,25 +39,18 @@ function enableHexFormatting(input) {
     const newCursor = rawBeforeCursor + Math.floor(rawBeforeCursor / 2);
     input.setSelectionRange(newCursor, newCursor);
   };
-
   input.addEventListener('keydown', keydownHandler);
   input.addEventListener('input', inputHandler);
-
   input._hexHandlers = { keydownHandler, inputHandler };
-
   input.value = formatHex(input.value);
 }
 
 function disableHexFormatting(input) {
   if (!input._hexHandlers) return;
-
   const { keydownHandler, inputHandler } = input._hexHandlers;
-
   input.removeEventListener('keydown', keydownHandler);
   input.removeEventListener('input', inputHandler);
-
   input._hexHandlers = null;
-
   input.classList.remove('hex');
 }
 
@@ -107,35 +97,44 @@ function asciiToBytes(str, padTo = 0) {
 }
 
 function bytesToHex(bytes) {
+  // Returns hex string with spaces every two digits
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    .join(' ');
 }
 
 // ---------- Setup ----------
 const keyInput = document.getElementById('key');
 const ptInput = document.getElementById('plaintext');
+const ctInput = document.getElementById('ciphertext');
 
 enableHexFormatting(keyInput); // key always hex
 
+function updatePtFormat() {
+  const format = document.querySelector('input[name="pt-format"]:checked').value;
+  const current = ptInput.value;
+  if (format === 'hex') {
+    // ASCII to hex
+    const hex = asciiToHex(current);
+    ptInput.value = hex;
+    ptInput.maxLength = 47;
+    enableHexFormatting(ptInput);
+  } else {
+    // Hex to ASCII
+    const ascii = hexToAscii(current);
+    disableHexFormatting(ptInput);
+    ptInput.value = ascii;
+    ptInput.maxLength = 16;
+  }
+  runAll();
+}
+
 document.querySelectorAll('input[name="pt-format"]').forEach(radio => {
-  radio.addEventListener('change', () => {
-    const current = ptInput.value;
-    if (radio.value === 'hex') {
-      // ASCII to hex
-      const hex = asciiToHex(current);
-      ptInput.value = hex;
-      ptInput.maxLength = 47;
-      enableHexFormatting(ptInput);
-    } else {
-      // Hex to ASCII
-      const ascii = hexToAscii(current);
-      disableHexFormatting(ptInput);
-      ptInput.value = ascii;
-      ptInput.maxLength = 16;
-    }
-  });
+  radio.addEventListener('change', updatePtFormat);
 });
+
+ptInput.addEventListener('input', runAll);
+keyInput.addEventListener('input', runAll);
 
 // ---------- Logic ----------
 function getPlaintext() {
@@ -146,39 +145,39 @@ function getPlaintext() {
     : asciiToBytes(val, 16);
 }
 
-function showRounds(rounds) {
-  const div = document.getElementById('rounds');
+function showRounds(rounds, div, reverse = false) {
   div.innerHTML = '';
-  rounds.forEach((state, i) => {
+  const arr = reverse ? [...rounds].reverse() : rounds;
+  arr.forEach((state, i) => {
     const el = document.createElement('div');
     el.className = 'round';
-    el.textContent = `Round ${i}: ${bytesToHex(state)}`;
+    el.innerHTML = `Round ${reverse ? rounds.length - 1 - i : i}: <pre>${bytesToHex(state)}</pre>`;
     div.appendChild(el);
   });
 }
 
-document.getElementById('encrypt').onclick = () => {
+function runAll() {
   const key = hexToBytes(keyInput.value, 16);
   const pt = getPlaintext();
+  const encDiv = document.getElementById('enc-rounds');
+  const decDiv = document.getElementById('dec-rounds');
   if (!key || key.length !== 16 || !pt || pt.length !== 16) {
-    const format = document.querySelector('input[name="pt-format"]:checked').value;
-    alert(format === 'hex'
-      ? 'Invalid hex input'
-      : 'Plaintext must be ≤16 ASCII chars');
+    encDiv.innerHTML = '';
+    decDiv.innerHTML = '';
+    ctInput.textContent = '';
     return;
   }
-  showRounds(encrypt_rounds(pt, key));
-};
+  // Encryption
+  const encRounds = encrypt_rounds(pt, key);
+  showRounds(encRounds, encDiv, false);
+  // Show ciphertext with spaces
+  const ciphertext = bytesToHex(encRounds[encRounds.length - 1]);
+  ctInput.textContent = ciphertext;
+  // Decryption
+  const ctBytes = hexToBytes(ciphertext, 16);
+  const decRounds = decrypt_rounds(ctBytes, key);
+  showRounds(decRounds, decDiv, true);
+}
 
-document.getElementById('decrypt').onclick = () => {
-  const key = hexToBytes(keyInput.value, 16);
-  const ct = getPlaintext();
-  if (!key || key.length !== 16 || !ct || ct.length !== 16) {
-    const format = document.querySelector('input[name="pt-format"]:checked').value;
-    alert(format === 'hex'
-      ? 'Invalid hex input'
-      : 'Ciphertext must be ≤16 ASCII chars');
-    return;
-  }
-  showRounds(decrypt_rounds(ct, key));
-};
+// Initial run
+runAll();

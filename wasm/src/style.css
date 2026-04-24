@@ -1,10 +1,45 @@
-body { font-family: sans-serif; max-width: 700px; margin: 2em auto; }
-textarea, input[type="text"] { width: 100%; margin-bottom: 1em; box-sizing: border-box; }
-.rounds { margin-top: 2em; }
+body {
+  font-family: sans-serif;
+  max-width: 700px;
+  margin: 2em auto;
+  font-size: 1.15em;
+}
+textarea, input[type="text"] {
+  width: 100%;
+  margin-bottom: 1em;
+  box-sizing: border-box;
+  font-size: 1.15em;
+  padding: 0.4em 0.6em;
+}
+.rounds-columns {
+  display: flex;
+  gap: 2em;
+  margin-top: 2em;
+}
+.rounds-columns > div {
+  flex: 1;
+}
+.rounds { margin-top: 1em; }
 .round { margin-bottom: 1em; padding: 0.5em; background: #f7f7f7; border-radius: 4px; }
 .radio-group { display: flex; gap: 1.2em; margin: 0.3em 0 0.6em; }
-.radio-group label { display: flex; align-items: center; gap: 0.3em; cursor: pointer; }
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  cursor: pointer;
+}
+
+label {
+  display: block;
+  padding-bottom: 0.25em;
+}
 
 input.hex {
   font-family: monospace;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
 }
