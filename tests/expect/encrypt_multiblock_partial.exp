@@ -1,0 +1,16 @@
+#!/usr/bin/expect -f
+# Test encryption of 18-byte input: 1 full block and 1 partial block (space-padded)
+set timeout 5
+set keyfile "example.key"
+
+spawn ../../target/debug/tiber --input "Short multi-block!" --output-hex encrypt --key $keyfile
+expect {
+    -re "180bd7483e8c1c47abd28fb33cb4e8a1" { }
+    timeout { puts "Timeout waiting for block 1"; exit 1 }
+    eof { puts "Unexpected EOF waiting for block 1"; exit 1 }
+}
+expect {
+    -re "7689b8547d3e80540ade078617b18aae" { exit 0 }
+    timeout { puts "Timeout waiting for block 2"; exit 1 }
+    eof { puts "Unexpected EOF waiting for block 2"; exit 1 }
+}

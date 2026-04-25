@@ -1,0 +1,16 @@
+#!/usr/bin/expect -f
+# Test decryption of a 2-block ciphertext passed as hex, with hex output
+set timeout 5
+set keyfile "example.key"
+
+spawn ../../target/debug/tiber --input-hex --output-hex --input "295a305925d90c8403b22dd3e7beefdbc379e82995c9334b00eab49cfe90822f" decrypt --key $keyfile
+expect {
+    -re "48656c6c6f2c20776f726c642120486f" { }
+    timeout { puts "Timeout waiting for block 1"; exit 1 }
+    eof { puts "Unexpected EOF waiting for block 1"; exit 1 }
+}
+expect {
+    -re "772061726520796f7520646f696e673f" { exit 0 }
+    timeout { puts "Timeout waiting for block 2"; exit 1 }
+    eof { puts "Unexpected EOF waiting for block 2"; exit 1 }
+}

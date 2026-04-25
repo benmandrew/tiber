@@ -1,0 +1,16 @@
+#!/usr/bin/expect -f
+# Test encryption of exactly 2 full blocks (32 bytes)
+set timeout 5
+set keyfile "example.key"
+
+spawn ../../target/debug/tiber --input "Hello, world! How are you doing?" --output-hex encrypt --key $keyfile
+expect {
+    -re "295a305925d90c8403b22dd3e7beefdb" { }
+    timeout { puts "Timeout waiting for block 1"; exit 1 }
+    eof { puts "Unexpected EOF waiting for block 1"; exit 1 }
+}
+expect {
+    -re "c379e82995c9334b00eab49cfe90822f" { exit 0 }
+    timeout { puts "Timeout waiting for block 2"; exit 1 }
+    eof { puts "Unexpected EOF waiting for block 2"; exit 1 }
+}
