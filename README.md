@@ -48,3 +48,11 @@ $ docker run -p 8080:80 benmandrew/tiber
 ```sh
 $ make
 ```
+
+## Documentation
+
+Code docs are located online at [benmandrew.com/docs/tiber/tiber/](https://benmandrew.com/docs/tiber/tiber/), or can be generated locally with
+
+```sh
+$ cargo doc --no-deps --open
+```
