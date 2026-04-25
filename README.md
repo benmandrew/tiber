@@ -35,7 +35,7 @@ H,l or lo lw!e d
 
 ## Web Interface
 
-The cipher can be interacted with through a web interface, by running the following command and opening [localhost:8080](localhost:8080).
+The cipher can be interacted with through a web interface, by running the following command and opening [localhost:8080](http://localhost:8080).
 
 ```sh
 $ docker run -p 8080:80 benmandrew/tiber
