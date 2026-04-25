@@ -1,0 +1,6 @@
+*
+!bin
+!src
+!wasm
+!Cargo.lock
+!Cargo.toml
