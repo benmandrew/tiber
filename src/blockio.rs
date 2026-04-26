@@ -1,5 +1,6 @@
 //! Block I/O utilities for reading, processing, and outputting 16-byte blocks in parallel.
-//! Provides the BlockIter iterator and process_blocks function for efficient block-wise operations.
+//!
+//! Provides the `BlockIter` iterator and `process_blocks` function for efficient block-wise operations.
 use rayon::prelude::*;
 use std::io::{self, BufWriter, Read, Write};
 
