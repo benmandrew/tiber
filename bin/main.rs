@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::fs::{self, File};
-use std::io::{self, BufReader, Cursor, Read};
+use std::io::BufWriter;
+use std::io::{self, BufReader, Cursor, Read, Write};
 use tiber::{decrypt, encrypt, key::Key128};
 
 #[derive(Parser)]
@@ -226,29 +227,24 @@ impl Iterator for BlockIter {
 }
 
 fn process_blocks(blocks: BlockIter, output_hex: bool, mut f: impl FnMut(&mut [u8; 16])) {
+    let stdout = io::stdout();
+    let mut writer = BufWriter::new(stdout.lock());
     for mut block in blocks {
         f(&mut block);
         if output_hex {
-            print_as_hex(&block);
+            let s = block
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>();
+            writeln!(writer, "{}", s).unwrap();
         } else {
-            for &b in &block {
-                print!("{}", b as char);
-            }
+            writer.write_all(&block).unwrap();
         }
     }
     if !output_hex {
-        println!();
+        writeln!(writer).unwrap();
     }
-}
-
-fn print_as_hex(bytes: &[u8; 16]) {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut s = String::with_capacity(32);
-    for &b in bytes {
-        s.push(HEX[(b >> 4) as usize] as char);
-        s.push(HEX[(b & 0xf) as usize] as char);
-    }
-    println!("{}", s);
+    writer.flush().unwrap();
 }
 
 fn decode_hex(s: &str) -> Result<Vec<u8>, String> {
