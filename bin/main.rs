@@ -1,9 +1,8 @@
 use clap::{Parser, Subcommand};
-use rayon::prelude::*;
-use std::fs::{self, File};
-use std::io::BufWriter;
-use std::io::{self, BufReader, Cursor, Read, Write};
-use tiber::{decrypt, encrypt, key::Key128};
+use std::fs;
+use std::fs::File;
+use std::io::{self, BufReader, Cursor, Read};
+use tiber::{blockio, decrypt, encrypt, key::Key128};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -73,7 +72,7 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
     let reader = make_reader(cli.input.clone(), cli.file.clone(), cli.input_hex);
-    let blocks = BlockIter::new(reader);
+    let blocks = blockio::BlockIter::new(reader);
     match &cli.command {
         Commands::Encrypt { key } => encrypt_command(blocks, cli.output_hex, key),
         Commands::Decrypt { key } => decrypt_command(blocks, cli.output_hex, key),
@@ -88,18 +87,18 @@ fn main() {
     }
 }
 
-fn encrypt_command(blocks: BlockIter, output_hex: bool, key_path: &str) {
+fn encrypt_command(blocks: blockio::BlockIter, output_hex: bool, key_path: &str) {
     let key = load_key(key_path);
-    process_blocks(blocks, output_hex, |b| encrypt::encrypt(b, &key));
+    blockio::process_blocks(blocks, output_hex, |b| encrypt::encrypt(b, &key));
 }
 
-fn decrypt_command(blocks: BlockIter, output_hex: bool, key_path: &str) {
+fn decrypt_command(blocks: blockio::BlockIter, output_hex: bool, key_path: &str) {
     let key = load_key(key_path);
-    process_blocks(blocks, output_hex, |b| decrypt::decrypt(b, &key));
+    blockio::process_blocks(blocks, output_hex, |b| decrypt::decrypt(b, &key));
 }
 
-fn subbytes_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
-    process_blocks(blocks, output_hex, move |b| {
+fn subbytes_command(blocks: blockio::BlockIter, output_hex: bool, inverse: bool) {
+    blockio::process_blocks(blocks, output_hex, move |b| {
         if inverse {
             decrypt::inv_sub_bytes(b)
         } else {
@@ -108,8 +107,8 @@ fn subbytes_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
     });
 }
 
-fn shiftrows_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
-    process_blocks(blocks, output_hex, move |b| {
+fn shiftrows_command(blocks: blockio::BlockIter, output_hex: bool, inverse: bool) {
+    blockio::process_blocks(blocks, output_hex, move |b| {
         if inverse {
             decrypt::inv_shift_rows(b)
         } else {
@@ -118,8 +117,8 @@ fn shiftrows_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
     });
 }
 
-fn mixcolumns_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
-    process_blocks(blocks, output_hex, move |b| {
+fn mixcolumns_command(blocks: blockio::BlockIter, output_hex: bool, inverse: bool) {
+    blockio::process_blocks(blocks, output_hex, move |b| {
         if inverse {
             decrypt::inv_mix_columns(b)
         } else {
@@ -129,7 +128,7 @@ fn mixcolumns_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
 }
 
 fn addroundkey_command(
-    blocks: BlockIter,
+    blocks: blockio::BlockIter,
     output_hex: bool,
     key_path: &str,
     inverse: bool,
@@ -137,7 +136,7 @@ fn addroundkey_command(
 ) {
     let key = load_key(key_path);
     let round_key = key.get_round_key(round);
-    process_blocks(blocks, output_hex, move |b| {
+    blockio::process_blocks(blocks, output_hex, move |b| {
         if inverse {
             decrypt::inv_add_round_key(b, &round_key)
         } else {
@@ -187,111 +186,6 @@ fn read_str(input: Option<String>, file: Option<String>) -> String {
             .expect("Failed to read stdin");
         buf.trim().to_string()
     }
-}
-
-/// Yields space-padded 16-byte blocks from a reader.
-/// Empty input produces one all-spaces block, matching single-block behaviour.
-struct BlockIter {
-    reader: Box<dyn Read>,
-    first: bool,
-    exhausted: bool,
-}
-
-impl BlockIter {
-    fn new(reader: Box<dyn Read>) -> Self {
-        Self {
-            reader,
-            first: true,
-            exhausted: false,
-        }
-    }
-}
-
-impl Iterator for BlockIter {
-    type Item = [u8; 16];
-
-    fn next(&mut self) -> Option<[u8; 16]> {
-        if self.exhausted {
-            return None;
-        }
-        let mut block = [b' '; 16];
-        let mut total = 0;
-        while total < 16 {
-            match self.reader.read(&mut block[total..]) {
-                Ok(0) => break,
-                Ok(n) => total += n,
-                Err(e) => panic!("Failed to read input: {}", e),
-            }
-        }
-        if total == 0 {
-            self.exhausted = true;
-            return if self.first {
-                self.first = false;
-                Some([b' '; 16])
-            } else {
-                None
-            };
-        }
-        self.first = false;
-        if total < 16 {
-            self.exhausted = true;
-        }
-        Some(block)
-    }
-}
-
-fn process_blocks<F>(blocks: BlockIter, output_hex: bool, f: F)
-where
-    F: Fn(&mut [u8; 16]) + Sync,
-{
-    if output_hex {
-        process_blocks_hex(blocks, f);
-    } else {
-        process_blocks_bin(blocks, f);
-    }
-}
-
-fn process_blocks_hex<F>(blocks: BlockIter, f: F)
-where
-    F: Fn(&mut [u8; 16]) + Sync,
-{
-    let stdout = io::stdout();
-    let mut writer = BufWriter::new(stdout.lock());
-    let mut block_vec: Vec<[u8; 16]> = blocks.collect();
-    let hex_lines: Vec<String> = block_vec
-        .par_iter_mut()
-        .map(|block| {
-            f(block);
-            block
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>()
-        })
-        .collect();
-    let hex_output = hex_lines.join("\n") + "\n";
-    writer.write_all(hex_output.as_bytes()).unwrap();
-    writer.flush().unwrap();
-}
-
-fn process_blocks_bin<F>(blocks: BlockIter, f: F)
-where
-    F: Fn(&mut [u8; 16]) + Sync,
-{
-    let stdout = io::stdout();
-    let mut writer = BufWriter::new(stdout.lock());
-    let mut block_vec: Vec<[u8; 16]> = blocks.collect();
-    let processed_blocks: Vec<[u8; 16]> = block_vec
-        .par_iter_mut()
-        .map(|block| {
-            f(block);
-            *block
-        })
-        .collect();
-    for block in processed_blocks {
-        writer.write_all(&block).unwrap();
-    }
-    writeln!(writer).unwrap();
-    writer.flush().unwrap();
 }
 
 fn decode_hex(s: &str) -> Result<Vec<u8>, String> {

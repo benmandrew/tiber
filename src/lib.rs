@@ -7,6 +7,7 @@
 //! - [Wikipedia](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
 #![deny(missing_docs)]
 
+pub mod blockio;
 pub mod decrypt;
 pub mod encrypt;
 pub mod key;
