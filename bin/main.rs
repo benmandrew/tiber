@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use rayon::prelude::*;
 use std::fs::{self, File};
 use std::io::BufWriter;
 use std::io::{self, BufReader, Cursor, Read, Write};
@@ -73,63 +74,76 @@ fn main() {
     let cli = Cli::parse();
     let reader = make_reader(cli.input.clone(), cli.file.clone(), cli.input_hex);
     let blocks = BlockIter::new(reader);
-
     match &cli.command {
-        Commands::Encrypt { key } => {
-            let key = load_key(key);
-            process_blocks(blocks, cli.output_hex, |b| encrypt::encrypt(b, &key));
-        }
-        Commands::Decrypt { key } => {
-            let key = load_key(key);
-            process_blocks(blocks, cli.output_hex, |b| decrypt::decrypt(b, &key));
-        }
-        Commands::SubBytes { inverse } => {
-            let inv = *inverse;
-            process_blocks(blocks, cli.output_hex, |b| {
-                if inv {
-                    decrypt::inv_sub_bytes(b)
-                } else {
-                    encrypt::sub_bytes(b)
-                }
-            });
-        }
-        Commands::ShiftRows { inverse } => {
-            let inv = *inverse;
-            process_blocks(blocks, cli.output_hex, |b| {
-                if inv {
-                    decrypt::inv_shift_rows(b)
-                } else {
-                    encrypt::shift_rows(b)
-                }
-            });
-        }
-        Commands::MixColumns { inverse } => {
-            let inv = *inverse;
-            process_blocks(blocks, cli.output_hex, |b| {
-                if inv {
-                    decrypt::inv_mix_columns(b)
-                } else {
-                    encrypt::mix_columns(b)
-                }
-            });
-        }
+        Commands::Encrypt { key } => encrypt_command(blocks, cli.output_hex, key),
+        Commands::Decrypt { key } => decrypt_command(blocks, cli.output_hex, key),
+        Commands::SubBytes { inverse } => subbytes_command(blocks, cli.output_hex, *inverse),
+        Commands::ShiftRows { inverse } => shiftrows_command(blocks, cli.output_hex, *inverse),
+        Commands::MixColumns { inverse } => mixcolumns_command(blocks, cli.output_hex, *inverse),
         Commands::AddRoundKey {
             key,
             inverse,
             round,
-        } => {
-            let key = load_key(key);
-            let round_key = key.get_round_key(*round);
-            let inv = *inverse;
-            process_blocks(blocks, cli.output_hex, |b| {
-                if inv {
-                    decrypt::inv_add_round_key(b, &round_key)
-                } else {
-                    encrypt::add_round_key(b, &round_key)
-                }
-            });
-        }
+        } => addroundkey_command(blocks, cli.output_hex, key, *inverse, *round),
     }
+}
+
+fn encrypt_command(blocks: BlockIter, output_hex: bool, key_path: &str) {
+    let key = load_key(key_path);
+    process_blocks(blocks, output_hex, |b| encrypt::encrypt(b, &key));
+}
+
+fn decrypt_command(blocks: BlockIter, output_hex: bool, key_path: &str) {
+    let key = load_key(key_path);
+    process_blocks(blocks, output_hex, |b| decrypt::decrypt(b, &key));
+}
+
+fn subbytes_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
+    process_blocks(blocks, output_hex, move |b| {
+        if inverse {
+            decrypt::inv_sub_bytes(b)
+        } else {
+            encrypt::sub_bytes(b)
+        }
+    });
+}
+
+fn shiftrows_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
+    process_blocks(blocks, output_hex, move |b| {
+        if inverse {
+            decrypt::inv_shift_rows(b)
+        } else {
+            encrypt::shift_rows(b)
+        }
+    });
+}
+
+fn mixcolumns_command(blocks: BlockIter, output_hex: bool, inverse: bool) {
+    process_blocks(blocks, output_hex, move |b| {
+        if inverse {
+            decrypt::inv_mix_columns(b)
+        } else {
+            encrypt::mix_columns(b)
+        }
+    });
+}
+
+fn addroundkey_command(
+    blocks: BlockIter,
+    output_hex: bool,
+    key_path: &str,
+    inverse: bool,
+    round: usize,
+) {
+    let key = load_key(key_path);
+    let round_key = key.get_round_key(round);
+    process_blocks(blocks, output_hex, move |b| {
+        if inverse {
+            decrypt::inv_add_round_key(b, &round_key)
+        } else {
+            encrypt::add_round_key(b, &round_key)
+        }
+    });
 }
 
 fn load_key(path: &str) -> Key128 {
@@ -226,24 +240,57 @@ impl Iterator for BlockIter {
     }
 }
 
-fn process_blocks(blocks: BlockIter, output_hex: bool, mut f: impl FnMut(&mut [u8; 16])) {
+fn process_blocks<F>(blocks: BlockIter, output_hex: bool, f: F)
+where
+    F: Fn(&mut [u8; 16]) + Sync,
+{
+    if output_hex {
+        process_blocks_hex(blocks, f);
+    } else {
+        process_blocks_bin(blocks, f);
+    }
+}
+
+fn process_blocks_hex<F>(blocks: BlockIter, f: F)
+where
+    F: Fn(&mut [u8; 16]) + Sync,
+{
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
-    for mut block in blocks {
-        f(&mut block);
-        if output_hex {
-            let s = block
+    let mut block_vec: Vec<[u8; 16]> = blocks.collect();
+    let hex_lines: Vec<String> = block_vec
+        .par_iter_mut()
+        .map(|block| {
+            f(block);
+            block
                 .iter()
                 .map(|b| format!("{:02x}", b))
-                .collect::<String>();
-            writeln!(writer, "{}", s).unwrap();
-        } else {
-            writer.write_all(&block).unwrap();
-        }
+                .collect::<String>()
+        })
+        .collect();
+    let hex_output = hex_lines.join("\n") + "\n";
+    writer.write_all(hex_output.as_bytes()).unwrap();
+    writer.flush().unwrap();
+}
+
+fn process_blocks_bin<F>(blocks: BlockIter, f: F)
+where
+    F: Fn(&mut [u8; 16]) + Sync,
+{
+    let stdout = io::stdout();
+    let mut writer = BufWriter::new(stdout.lock());
+    let mut block_vec: Vec<[u8; 16]> = blocks.collect();
+    let processed_blocks: Vec<[u8; 16]> = block_vec
+        .par_iter_mut()
+        .map(|block| {
+            f(block);
+            *block
+        })
+        .collect();
+    for block in processed_blocks {
+        writer.write_all(&block).unwrap();
     }
-    if !output_hex {
-        writeln!(writer).unwrap();
-    }
+    writeln!(writer).unwrap();
     writer.flush().unwrap();
 }
 
