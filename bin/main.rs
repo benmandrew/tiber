@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
-use std::fs;
-use std::io::{self, Read};
+use std::fs::{self, File};
+use std::io::{self, BufReader, Cursor, Read};
 use tiber::{decrypt, encrypt, key::Key128};
 
 #[derive(Parser)]
@@ -70,152 +70,173 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
-    let mut blocks = get_input_blocks(cli.input.clone(), cli.file.clone(), cli.input_hex);
+    let reader = make_reader(cli.input.clone(), cli.file.clone(), cli.input_hex);
+    let blocks = BlockIter::new(reader);
+
     match &cli.command {
         Commands::Encrypt { key } => {
-            for block in &mut blocks {
-                encrypt_command(key, block);
-            }
+            let key = load_key(key);
+            process_blocks(blocks, cli.output_hex, |b| encrypt::encrypt(b, &key));
         }
         Commands::Decrypt { key } => {
-            for block in &mut blocks {
-                decrypt_command(key, block);
-            }
+            let key = load_key(key);
+            process_blocks(blocks, cli.output_hex, |b| decrypt::decrypt(b, &key));
         }
         Commands::SubBytes { inverse } => {
-            for block in &mut blocks {
-                sub_bytes_command(*inverse, block);
-            }
+            let inv = *inverse;
+            process_blocks(blocks, cli.output_hex, |b| {
+                if inv {
+                    decrypt::inv_sub_bytes(b)
+                } else {
+                    encrypt::sub_bytes(b)
+                }
+            });
         }
         Commands::ShiftRows { inverse } => {
-            for block in &mut blocks {
-                shift_rows_command(*inverse, block);
-            }
+            let inv = *inverse;
+            process_blocks(blocks, cli.output_hex, |b| {
+                if inv {
+                    decrypt::inv_shift_rows(b)
+                } else {
+                    encrypt::shift_rows(b)
+                }
+            });
         }
         Commands::MixColumns { inverse } => {
-            for block in &mut blocks {
-                mix_columns_command(*inverse, block);
-            }
+            let inv = *inverse;
+            process_blocks(blocks, cli.output_hex, |b| {
+                if inv {
+                    decrypt::inv_mix_columns(b)
+                } else {
+                    encrypt::mix_columns(b)
+                }
+            });
         }
         Commands::AddRoundKey {
             key,
             inverse,
             round,
         } => {
-            for block in &mut blocks {
-                add_round_key_command(key, *inverse, *round, block);
-            }
+            let key = load_key(key);
+            let round_key = key.get_round_key(*round);
+            let inv = *inverse;
+            process_blocks(blocks, cli.output_hex, |b| {
+                if inv {
+                    decrypt::inv_add_round_key(b, &round_key)
+                } else {
+                    encrypt::add_round_key(b, &round_key)
+                }
+            });
         }
     }
-    print_blocks(&blocks, cli.output_hex);
 }
 
-fn encrypt_command(key_path: &str, state: &mut [u8; 16]) {
-    let key_bytes = fs::read(key_path).expect("Failed to read key file");
-    assert_eq!(key_bytes.len(), 16, "Key must be 16 bytes");
-    let key = Key128::new(key_bytes.try_into().unwrap());
-    encrypt::encrypt(state, &key);
+fn load_key(path: &str) -> Key128 {
+    let bytes = fs::read(path).expect("Failed to read key file");
+    assert_eq!(bytes.len(), 16, "Key must be 16 bytes");
+    Key128::new(bytes.try_into().unwrap())
 }
 
-fn decrypt_command(key_path: &str, state: &mut [u8; 16]) {
-    let key_bytes = fs::read(key_path).expect("Failed to read key file");
-    assert_eq!(key_bytes.len(), 16, "Key must be 16 bytes");
-    let key = Key128::new(key_bytes.try_into().unwrap());
-    decrypt::decrypt(state, &key);
-}
-
-fn sub_bytes_command(inverse: bool, state: &mut [u8; 16]) {
-    if inverse {
-        decrypt::inv_sub_bytes(state);
+/// Returns a reader over raw input bytes.
+/// For hex input, all hex is decoded upfront since it requires full-string parsing.
+/// For file/stdin, a buffered reader is returned so blocks are read on demand.
+fn make_reader(input: Option<String>, file: Option<String>, input_hex: bool) -> Box<dyn Read> {
+    if input_hex {
+        let s = read_str(input, file);
+        let bytes = decode_hex(&s).expect("Failed to decode hex input");
+        Box::new(Cursor::new(bytes))
+    } else if let Some(path) = file {
+        Box::new(BufReader::new(
+            File::open(path).expect("Failed to open input file"),
+        ))
+    } else if let Some(s) = input {
+        Box::new(Cursor::new(s.into_bytes()))
     } else {
-        encrypt::sub_bytes(state);
+        Box::new(BufReader::new(io::stdin()))
     }
 }
 
-fn shift_rows_command(inverse: bool, state: &mut [u8; 16]) {
-    if inverse {
-        decrypt::inv_shift_rows(state);
-    } else {
-        encrypt::shift_rows(state);
-    }
-}
-
-fn mix_columns_command(inverse: bool, state: &mut [u8; 16]) {
-    if inverse {
-        decrypt::inv_mix_columns(state);
-    } else {
-        encrypt::mix_columns(state);
-    }
-}
-
-fn add_round_key_command(key_path: &str, inverse: bool, round: usize, state: &mut [u8; 16]) {
-    let key_bytes = fs::read(key_path).expect("Failed to read key file");
-    assert_eq!(key_bytes.len(), 16, "Key must be 16 bytes");
-    let key = Key128::new(key_bytes.try_into().unwrap());
-    let round_key = key.get_round_key(round);
-    if inverse {
-        decrypt::inv_add_round_key(state, &round_key);
-    } else {
-        encrypt::add_round_key(state, &round_key);
-    }
-}
-
-fn get_input_blocks(input: Option<String>, file: Option<String>, input_hex: bool) -> Vec<[u8; 16]> {
-    let input_str = read_input_str(input, file);
-    let bytes: Vec<u8> = if input_hex {
-        decode_hex(&input_str).expect("Failed to decode hex input")
-    } else {
-        input_str.into_bytes()
-    };
-    to_blocks(bytes)
-}
-
-fn read_input_str(input: Option<String>, file: Option<String>) -> String {
+fn read_str(input: Option<String>, file: Option<String>) -> String {
     if let Some(path) = file {
         let raw = fs::read(&path).expect("Failed to read input file");
         String::from_utf8(raw)
             .expect("Input file is not valid UTF-8")
             .trim()
             .to_string()
+    } else if let Some(s) = input {
+        s
     } else {
-        match input {
-            Some(s) => s,
-            None => {
-                let mut buffer = String::new();
-                io::stdin()
-                    .read_to_string(&mut buffer)
-                    .expect("Failed to read stdin");
-                buffer.trim().to_string()
+        let mut buf = String::new();
+        io::stdin()
+            .read_to_string(&mut buf)
+            .expect("Failed to read stdin");
+        buf.trim().to_string()
+    }
+}
+
+/// Yields space-padded 16-byte blocks from a reader.
+/// Empty input produces one all-spaces block, matching single-block behaviour.
+struct BlockIter {
+    reader: Box<dyn Read>,
+    first: bool,
+    exhausted: bool,
+}
+
+impl BlockIter {
+    fn new(reader: Box<dyn Read>) -> Self {
+        Self {
+            reader,
+            first: true,
+            exhausted: false,
+        }
+    }
+}
+
+impl Iterator for BlockIter {
+    type Item = [u8; 16];
+
+    fn next(&mut self) -> Option<[u8; 16]> {
+        if self.exhausted {
+            return None;
+        }
+        let mut block = [b' '; 16];
+        let mut total = 0;
+        while total < 16 {
+            match self.reader.read(&mut block[total..]) {
+                Ok(0) => break,
+                Ok(n) => total += n,
+                Err(e) => panic!("Failed to read input: {}", e),
             }
         }
-    }
-}
-
-fn to_blocks(bytes: Vec<u8>) -> Vec<[u8; 16]> {
-    if bytes.is_empty() {
-        return vec![[b' '; 16]];
-    }
-    bytes
-        .chunks(16)
-        .map(|chunk| {
-            let mut block = [b' '; 16];
-            block[..chunk.len()].copy_from_slice(chunk);
-            block
-        })
-        .collect()
-}
-
-fn print_blocks(blocks: &[[u8; 16]], as_hex: bool) {
-    if as_hex {
-        for block in blocks {
-            print_as_hex(block);
+        if total == 0 {
+            self.exhausted = true;
+            return if self.first {
+                self.first = false;
+                Some([b' '; 16])
+            } else {
+                None
+            };
         }
-    } else {
-        for block in blocks {
-            for &b in block {
+        self.first = false;
+        if total < 16 {
+            self.exhausted = true;
+        }
+        Some(block)
+    }
+}
+
+fn process_blocks(blocks: BlockIter, output_hex: bool, mut f: impl FnMut(&mut [u8; 16])) {
+    for mut block in blocks {
+        f(&mut block);
+        if output_hex {
+            print_as_hex(&block);
+        } else {
+            for &b in &block {
                 print!("{}", b as char);
             }
         }
+    }
+    if !output_hex {
         println!();
     }
 }
