@@ -7,9 +7,18 @@ edition = "2024"
 name = "tiber"
 path = "bin/main.rs"
 
+[features]
+fuzzing = ["dep:afl"]
+
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
 rayon = "1.12.0"
+afl = { version = "0.15", optional = true }
+
+[[bin]]
+name = "fuzz"
+path = "fuzz/roundtrip.rs"
+required-features = ["fuzzing"]
 
 [workspace]
 members = [".", "wasm"]

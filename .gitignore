@@ -2,3 +2,5 @@
 /wasm/target
 /wasm/pkg
 .claude/
+/fuzz/corpus/
+/fuzz/findings/
