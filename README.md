@@ -62,7 +62,7 @@ $ cargo doc --no-deps --open
 Fuzz test inputs to the cipher with
 
 ```sh
-$ docker run benmandrew/tiber-fuzz
+$ docker run benmandrew/tiber:fuzz
 ```
 
 Each input is encrypted and decrypted to check idempotence, and the binary is built with ASan to detect memory errors.
