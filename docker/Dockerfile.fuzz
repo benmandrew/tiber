@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+
+FROM rust:slim-trixie AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        clang \
+        llvm \
+        python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup toolchain install nightly
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo +nightly install cargo-fuzz
+
+WORKDIR /app
+COPY . .
+
+RUN mkdir -p fuzz/corpus/roundtrip \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed01','wb').write(bytes.fromhex('0'*64))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed02','wb').write(bytes.fromhex('2b7e151628aed2a6abf7158809cf4f3c3243f6a8885a308d313198a2e0370734'))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed03','wb').write(bytes.fromhex('000102030405060708090a0b0c0d0e0f00112233445566778899aabbccddeeff'))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed04','wb').write(bytes.fromhex('2b7e151628aed2a6abf7158809cf4f3c6bc1bee22e409f96e93d7e117393172a'))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed05','wb').write(bytes.fromhex('2b7e151628aed2a6abf7158809cf4f3cae2d8a571e03ac9c9eb76fac45af8e51'))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed06','wb').write(bytes.fromhex('2b7e151628aed2a6abf7158809cf4f3c30c81c46a35ce411e5fbc1191a0a52ef'))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed07','wb').write(bytes.fromhex('2b7e151628aed2a6abf7158809cf4f3cf69f2445df4f9b17ad2b417be66c3710'))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed08','wb').write(bytes.fromhex('f'*64))" \
+    && python3 -c "open('fuzz/corpus/roundtrip/seed09','wb').write(bytes.fromhex('000102030405060708090a0b0c0d0e0f0f1e2d3c4b5a69788796a5b4c3d2e1f0'))"
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/fuzz/target \
+    cargo +nightly fuzz build roundtrip \
+    && find fuzz/target -name roundtrip -type f ! -path '*/deps/*' \
+       -exec cp {} /usr/local/bin/roundtrip \;
+
+FROM debian:trixie-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgcc-s1 \
+        libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/roundtrip /usr/local/bin/roundtrip
+COPY --from=builder /app/fuzz/corpus/roundtrip /corpus
+
+ENTRYPOINT ["roundtrip", "/corpus"]
+CMD ["-max_len=32"]

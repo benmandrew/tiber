@@ -1,10 +1,10 @@
 # ---- Build WASM ----
 FROM rust:1.95-slim AS builder
 WORKDIR /app
-RUN rustup target add wasm32-unknown-unknown
-RUN cargo install wasm-pack
+RUN rustup target add wasm32-unknown-unknown && cargo install wasm-pack
 COPY . .
-RUN cd wasm && wasm-pack build --target web
+RUN wasm-pack build --release --target web wasm
+WORKDIR /app
 RUN cp -r wasm/pkg/* .
 
 FROM nginx:alpine

@@ -56,3 +56,13 @@ Code docs are located online at [benmandrew.com/docs/tiber/tiber/](https://benma
 ```sh
 $ cargo doc --no-deps --open
 ```
+
+## Fuzzing
+
+Fuzz test inputs to the cipher with
+
+```sh
+$ docker run benmandrew/tiber:fuzz
+```
+
+Each input is encrypted and decrypted to check idempotence, and the binary is built with ASan to detect memory errors.

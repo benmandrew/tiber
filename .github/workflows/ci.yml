@@ -80,6 +80,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
+          context: .
+          file: docker/Dockerfile
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           platforms: ${{ matrix.platform }}
 
@@ -96,6 +98,33 @@ jobs:
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
+
+  docker-fuzz:
+    name: Fuzz Docker (${{ matrix.name }})
+    needs: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            runner: ubuntu-latest
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Build fuzz image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.fuzz
+          load: true
+          tags: tiber-fuzz:ci
+          cache-from: type=gha,scope=fuzz-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=fuzz-${{ matrix.name }}
+      - name: Smoke test
+        run: docker run --rm tiber-fuzz:ci
 
   docker-manifest:
     name: Push Docker Manifest
