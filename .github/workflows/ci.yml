@@ -81,7 +81,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: docker/Dockerfile
+          file: docker/Dockerfile.web
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           platforms: ${{ matrix.platform }}
 
@@ -98,33 +98,6 @@ jobs:
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
-
-  docker-fuzz:
-    name: Fuzz Docker (${{ matrix.name }})
-    needs: [test]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux-amd64
-            runner: ubuntu-latest
-          - name: linux-arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v4
-      - name: Build fuzz image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile.fuzz
-          load: true
-          tags: tiber-fuzz:ci
-          cache-from: type=gha,scope=fuzz-${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=fuzz-${{ matrix.name }}
-      - name: Smoke test
-        run: docker run --rm tiber-fuzz:ci
 
   docker-manifest:
     name: Push Docker Manifest
@@ -144,6 +117,84 @@ jobs:
         with:
           path: /tmp/digests
           pattern: digests-*
+          merge-multiple: true
+
+      - name: Create multi-arch latest tag
+        run: |
+          set --
+          for f in /tmp/digests/*; do
+            set -- "$@" "${IMAGE}@sha256:$(basename "$f")"
+          done
+          docker buildx imagetools create --tag "${IMAGE}:latest" "$@"
+
+  docker-fuzz:
+    name: Push Fuzz Docker (${{ matrix.name }})
+    needs: [test]
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/tiber-fuzz
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.fuzz
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          platforms: ${{ matrix.platform }}
+          cache-from: type=gha,scope=fuzz-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=fuzz-${{ matrix.name }}
+
+      - name: Export digest for manifest job
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-fuzz-${{ matrix.name }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-fuzz-manifest:
+    name: Push Fuzz Docker Manifest
+    runs-on: ubuntu-latest
+    needs: [docker-fuzz]
+    if: github.ref == 'refs/heads/main'
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/tiber-fuzz
+    steps:
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digests-fuzz-*
           merge-multiple: true
 
       - name: Create multi-arch latest tag
