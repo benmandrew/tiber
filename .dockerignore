@@ -2,6 +2,7 @@
 !bin
 !src
 !wasm
+!xtask
 !Cargo.lock
 !Cargo.toml
 !fuzz
