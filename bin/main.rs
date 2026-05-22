@@ -202,3 +202,109 @@ fn decode_hex(s: &str) -> Result<Vec<u8>, String> {
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+
+    #[test]
+    fn decode_hex_empty_string_returns_empty_vec() {
+        assert_eq!(decode_hex(""), Ok(vec![]));
+    }
+
+    #[test]
+    fn decode_hex_whitespace_only_returns_empty_vec() {
+        assert_eq!(decode_hex("   "), Ok(vec![]));
+    }
+
+    #[test]
+    fn decode_hex_lowercase_decodes_correctly() {
+        assert_eq!(decode_hex("48656c6c6f"), Ok(b"Hello".to_vec()));
+    }
+
+    #[test]
+    fn decode_hex_uppercase_decodes_correctly() {
+        assert_eq!(decode_hex("48656C6C6F"), Ok(b"Hello".to_vec()));
+    }
+
+    #[test]
+    fn decode_hex_trims_surrounding_whitespace() {
+        assert_eq!(decode_hex("  4865  "), Ok(b"He".to_vec()));
+    }
+
+    #[test]
+    fn decode_hex_all_zeros() {
+        assert_eq!(decode_hex("00000000"), Ok(vec![0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn decode_hex_all_ff() {
+        assert_eq!(decode_hex("ffffffff"), Ok(vec![0xff, 0xff, 0xff, 0xff]));
+    }
+
+    #[test]
+    fn decode_hex_odd_length_returns_error() {
+        assert_eq!(
+            decode_hex("abc"),
+            Err("Hex input must have even length".to_string())
+        );
+    }
+
+    #[test]
+    fn decode_hex_invalid_digit_returns_error() {
+        assert!(decode_hex("zz").is_err());
+    }
+
+    #[test]
+    fn read_str_returns_provided_input() {
+        assert_eq!(read_str(Some("hello world".to_string()), None), "hello world");
+    }
+
+    #[test]
+    fn read_str_reads_and_trims_file() {
+        let path = std::env::temp_dir().join("tiber_test_read_str.txt");
+        std::fs::write(&path, "  file content  ").unwrap();
+        let result = read_str(None, Some(path.to_str().unwrap().to_string()));
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(result, "file content");
+    }
+
+    #[test]
+    fn make_reader_with_string_input() {
+        let mut r = make_reader(Some("hello".to_string()), None, false);
+        let mut buf = Vec::new();
+        r.read_to_end(&mut buf).unwrap();
+        assert_eq!(buf, b"hello");
+    }
+
+    #[test]
+    fn make_reader_with_hex_input_decodes_bytes() {
+        let mut r = make_reader(Some("4865".to_string()), None, true);
+        let mut buf = Vec::new();
+        r.read_to_end(&mut buf).unwrap();
+        assert_eq!(buf, b"He");
+    }
+
+    #[test]
+    fn make_reader_with_file_path() {
+        let path = std::env::temp_dir().join("tiber_test_make_reader.bin");
+        std::fs::write(&path, b"test data").unwrap();
+        let mut r = make_reader(None, Some(path.to_str().unwrap().to_string()), false);
+        let mut buf = Vec::new();
+        r.read_to_end(&mut buf).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(buf, b"test data");
+    }
+
+    #[test]
+    fn load_key_reads_16_byte_key() {
+        let path = std::env::temp_dir().join("tiber_test_load_key.bin");
+        let key_bytes = [0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+                         0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c];
+        std::fs::write(&path, key_bytes).unwrap();
+        let key = load_key(path.to_str().unwrap());
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(key.key, key_bytes);
+    }
+}

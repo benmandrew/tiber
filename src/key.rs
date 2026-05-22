@@ -176,46 +176,101 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_expand_key_128bit_zero() {
-        // 128-bit zero key
-        let key = Key128::new([0u8; 16]);
-        let expanded = &key.round_keys;
-        let expected_hex = "
-            00000000 00000000 00000000 00000000
-            62636363 62636363 62636363 62636363
-            9b9898c9 f9fbfbaa 9b9898c9 f9fbfbaa
-            90973450 696ccffa f2f45733 0b0fac99
-            ee06da7b 876a1581 759e42b2 7e91ee2b
-            7f2e2b88 f8443e09 8dda7cbb f34b9290
-            ec614b85 1425758c 99ff0937 6ab49ba7
-            21751787 3550620b acaf6b3c c61bf09b
-            0ef90333 3ba96138 97060a04 511dfa9f
-            b1d4d8e2 8a7db9da 1d7bb3de 4c664941
-            b4ef5bcb 3e92e211 23e951cf 6f8f188e
-        "
-        .replace(['\n', ' '], "");
-        let expected: Vec<[u8; 4]> = expected_hex
+    fn parse_hex_words(s: &str) -> Vec<[u8; 4]> {
+        s.replace(['\n', ' '], "")
             .as_bytes()
             .chunks(8)
             .map(|chunk| {
                 let s = std::str::from_utf8(chunk).unwrap();
-                let u32_val = u32::from_str_radix(s, 16).unwrap();
-                [
-                    (u32_val >> 24) as u8,
-                    (u32_val >> 16) as u8,
-                    (u32_val >> 8) as u8,
-                    u32_val as u8,
-                ]
+                let u = u32::from_str_radix(s, 16).unwrap();
+                [(u >> 24) as u8, (u >> 16) as u8, (u >> 8) as u8, u as u8]
             })
-            .collect();
-        assert_eq!(
-            expanded.len(),
-            expected.len(),
-            "Expanded key length mismatch"
-        );
-        for (i, (a, b)) in expanded.iter().zip(expected.iter()).enumerate() {
-            assert_eq!(a, b, "Word {}", i);
+            .collect()
+    }
+
+    fn assert_round_keys_eq(actual: &[[u8; 4]], expected: &[[u8; 4]]) {
+        assert_eq!(actual.len(), expected.len(), "word count mismatch");
+        for (i, (a, b)) in actual.iter().zip(expected).enumerate() {
+            assert_eq!(a, b, "word {i}");
         }
+    }
+
+    #[test]
+    fn test_expand_key_128bit_zero() {
+        // NIST FIPS 197, Appendix A.1
+        let key = Key128::new([0u8; 16]);
+        assert_round_keys_eq(
+            &key.round_keys,
+            &parse_hex_words(
+                "00000000 00000000 00000000 00000000
+                 62636363 62636363 62636363 62636363
+                 9b9898c9 f9fbfbaa 9b9898c9 f9fbfbaa
+                 90973450 696ccffa f2f45733 0b0fac99
+                 ee06da7b 876a1581 759e42b2 7e91ee2b
+                 7f2e2b88 f8443e09 8dda7cbb f34b9290
+                 ec614b85 1425758c 99ff0937 6ab49ba7
+                 21751787 3550620b acaf6b3c c61bf09b
+                 0ef90333 3ba96138 97060a04 511dfa9f
+                 b1d4d8e2 8a7db9da 1d7bb3de 4c664941
+                 b4ef5bcb 3e92e211 23e951cf 6f8f188e",
+            ),
+        );
+    }
+
+    #[test]
+    fn test_expand_key_192bit_nist() {
+        // NIST FIPS 197, Appendix A.2
+        let key = Key192::new([
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+            0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        ]);
+        assert_round_keys_eq(
+            &key.round_keys,
+            &parse_hex_words(
+                "00010203 04050607 08090a0b 0c0d0e0f
+                 10111213 14151617 5846f2f9 5c43f4fe
+                 544afef5 5847f0fa 4856e2e9 5c43f4fe
+                 40f949b3 1cbabd4d 48f043b8 10b7b342
+                 58e151ab 04a2a555 7effb541 6245080c
+                 2ab54bb4 3a02f8f6 62e3a95d 66410c08
+                 f5018572 97448d7e bdf1c6ca 87f33e3c
+                 e5109761 83519b69 34157c9e a351f1e0
+                 1ea0372a 99530916 7c439e77 ff12051e
+                 dd7e0e88 7e2fff68 608fc842 f9dcc154
+                 859f5f23 7a8d5a3d c0c02952 beefd63a
+                 de601e78 27bcdf2c a223800f d8aeda32
+                 a4970a33 1a78dc09 c418c271 e3a41d5d",
+            ),
+        );
+    }
+
+    #[test]
+    fn test_expand_key_256bit_nist() {
+        // NIST FIPS 197, Appendix A.3
+        let key = Key256::new([
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+            0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b,
+            0x1c, 0x1d, 0x1e, 0x1f,
+        ]);
+        assert_round_keys_eq(
+            &key.round_keys,
+            &parse_hex_words(
+                "00010203 04050607 08090a0b 0c0d0e0f
+                 10111213 14151617 18191a1b 1c1d1e1f
+                 a573c29f a176c498 a97fce93 a572c09c
+                 1651a8cd 0244beda 1a5da4c1 0640bade
+                 ae87dff0 0ff11b68 a68ed5fb 03fc1567
+                 6de1f148 6fa54f92 75f8eb53 73b8518d
+                 c656827f c9a79917 6f294cec 6cd5598b
+                 3de23a75 524775e7 27bf9eb4 5407cf39
+                 0bdc905f c27b0948 ad5245a4 c1871c2f
+                 45f5a660 17b2d387 300d4d33 640a820a
+                 7ccff71c beb4fe54 13e6bbf0 d261a7df
+                 f01afafe e7a82979 d7a5644a b3afe640
+                 2541fe71 9bf50025 8813bbd5 5a721c0a
+                 4e5a6699 a9f24fe0 7e572baa cdf8cdea
+                 24fc79cc bf0979e9 371ac23c 6d68de36",
+            ),
+        );
     }
 }

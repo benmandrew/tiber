@@ -112,3 +112,74 @@ where
     writeln!(writer).unwrap();
     writer.flush().unwrap();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn iter_from(data: &[u8]) -> BlockIter {
+        BlockIter::new(Box::new(Cursor::new(data.to_vec())))
+    }
+
+    #[test]
+    fn empty_input_yields_one_space_block() {
+        let mut iter = iter_from(b"");
+        assert_eq!(iter.next(), Some([b' '; 16]));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn short_input_pads_remainder_with_spaces() {
+        let mut iter = iter_from(b"Hi");
+        let block = iter.next().unwrap();
+        assert_eq!(&block[..2], b"Hi");
+        assert_eq!(block[2..], [b' '; 14]);
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn exact_16_bytes_yields_one_full_block() {
+        let data = [1u8; 16];
+        let mut iter = iter_from(&data);
+        assert_eq!(iter.next(), Some(data));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn two_full_blocks_yields_two_blocks() {
+        let data: Vec<u8> = (0u8..32).collect();
+        let mut iter = iter_from(&data);
+        assert_eq!(
+            iter.next().unwrap(),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        );
+        assert_eq!(
+            iter.next().unwrap(),
+            [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+        );
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn partial_second_block_is_padded_with_spaces() {
+        let data: Vec<u8> = (0u8..20).collect();
+        let mut iter = iter_from(&data);
+        assert_eq!(
+            iter.next().unwrap(),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        );
+        let b2 = iter.next().unwrap();
+        assert_eq!(&b2[..4], &[16u8, 17, 18, 19]);
+        assert_eq!(b2[4..], [b' '; 12]);
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn exhausted_iterator_keeps_returning_none() {
+        let mut iter = iter_from(b"Hello, world!");
+        while iter.next().is_some() {}
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next(), None);
+    }
+}
