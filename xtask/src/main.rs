@@ -31,10 +31,16 @@ fn main() {
     let report: Report = serde_json::from_str(&input).expect("invalid coverage JSON");
     let percent = report.data[0].totals.lines.percent;
 
-    let color = if percent >= 90.0 {
-        "#4c1"
+    let color = if percent >= 95.0 {
+        "#44cc11"
+    } else if percent >= 85.0 {
+        "#97ca00"
     } else if percent >= 75.0 {
+        "#a4a61d"
+    } else if percent >= 65.0 {
         "#dfb317"
+    } else if percent >= 50.0 {
+        "#fe7d37"
     } else {
         "#e05d44"
     };
