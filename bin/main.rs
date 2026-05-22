@@ -258,7 +258,10 @@ mod tests {
 
     #[test]
     fn read_str_returns_provided_input() {
-        assert_eq!(read_str(Some("hello world".to_string()), None), "hello world");
+        assert_eq!(
+            read_str(Some("hello world".to_string()), None),
+            "hello world"
+        );
     }
 
     #[test]
@@ -300,8 +303,10 @@ mod tests {
     #[test]
     fn load_key_reads_16_byte_key() {
         let path = std::env::temp_dir().join("tiber_test_load_key.bin");
-        let key_bytes = [0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
-                         0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c];
+        let key_bytes = [
+            0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf,
+            0x4f, 0x3c,
+        ];
         std::fs::write(&path, key_bytes).unwrap();
         let key = load_key(path.to_str().unwrap());
         std::fs::remove_file(&path).unwrap();
