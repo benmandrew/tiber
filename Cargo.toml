@@ -12,4 +12,4 @@ clap = { version = "4.6.1", features = ["derive"] }
 rayon = "1.12.0"
 
 [workspace]
-members = [".", "wasm"]
+members = [".", "wasm", "xtask"]

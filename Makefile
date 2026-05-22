@@ -1,4 +1,4 @@
-.PHONY: build-native build-wasm fmt fmt-ci lint fuzz-corpus fuzz-build fuzz
+.PHONY: build-native build-wasm fmt fmt-ci lint coverage fuzz-corpus fuzz-build fuzz
 
 BOLD_CYAN := \033[1;36m
 RESET := \033[0m
@@ -32,6 +32,15 @@ fmt-ci:
 lint:
 	$(call log,Running clippy linter)
 	@cargo clippy --all-targets --all-features -- -D warnings
+
+coverage:
+	$(call log,Measuring coverage and generating badge)
+	@command -v cargo-llvm-cov >/dev/null 2>&1 || { \
+		printf '\033[1;31m[ERROR]\033[0m cargo-llvm-cov not found. Please run: cargo install cargo-llvm-cov\n' ; \
+		exit 1 ; \
+	}
+	@rustup component add llvm-tools-preview --toolchain stable >/dev/null 2>&1
+	@cargo llvm-cov --json --summary-only 2>/dev/null | cargo run --package xtask -q
 
 FUZZ_CORPUS := fuzz/corpus
 
