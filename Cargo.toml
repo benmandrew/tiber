@@ -7,6 +7,10 @@ edition = "2024"
 name = "tiber"
 path = "bin/main.rs"
 
+[[bin]]
+name = "tiber-bench"
+path = "bin/bench.rs"
+
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
 rayon = "1.12.0"
