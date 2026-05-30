@@ -8,6 +8,7 @@
 #![deny(missing_docs)]
 
 pub mod blockio;
+pub mod cbc;
 pub mod decrypt;
 pub mod encrypt;
 pub mod key;

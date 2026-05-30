@@ -2,7 +2,12 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufReader, Cursor, Read};
-use tiber::{blockio, decrypt, encrypt, key::Key128};
+use tiber::{blockio, cbc, decrypt, encrypt, key::Key128};
+
+fn die(msg: impl std::fmt::Display) -> ! {
+    eprintln!("error: {msg}");
+    std::process::exit(1);
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -30,12 +35,24 @@ enum Commands {
         /// Path to key file (16 bytes)
         #[arg(short, long)]
         key: String,
+        /// Use Cipher Block Chaining (CBC) mode; requires --iv
+        #[arg(long, default_value_t = false)]
+        cbc: bool,
+        /// Initialisation vector as 32 hex characters (required with --cbc)
+        #[arg(long)]
+        iv: Option<String>,
     },
     /// Decrypt input
     Decrypt {
         /// Path to key file (16 bytes)
         #[arg(short, long)]
         key: String,
+        /// Use Cipher Block Chaining (CBC) mode; requires --iv
+        #[arg(long, default_value_t = false)]
+        cbc: bool,
+        /// Initialisation vector as 32 hex characters (required with --cbc)
+        #[arg(long)]
+        iv: Option<String>,
     },
     /// Apply sub_bytes only
     SubBytes {
@@ -74,8 +91,12 @@ fn main() {
     let reader = make_reader(cli.input.clone(), cli.file.clone(), cli.input_hex);
     let blocks = blockio::BlockIter::new(reader);
     match &cli.command {
-        Commands::Encrypt { key } => encrypt_command(blocks, cli.output_hex, key),
-        Commands::Decrypt { key } => decrypt_command(blocks, cli.output_hex, key),
+        Commands::Encrypt { key, cbc, iv } => {
+            encrypt_command(blocks, cli.output_hex, key, *cbc, iv.as_deref())
+        }
+        Commands::Decrypt { key, cbc, iv } => {
+            decrypt_command(blocks, cli.output_hex, key, *cbc, iv.as_deref())
+        }
         Commands::SubBytes { inverse } => subbytes_command(blocks, cli.output_hex, *inverse),
         Commands::ShiftRows { inverse } => shiftrows_command(blocks, cli.output_hex, *inverse),
         Commands::MixColumns { inverse } => mixcolumns_command(blocks, cli.output_hex, *inverse),
@@ -87,14 +108,52 @@ fn main() {
     }
 }
 
-fn encrypt_command(blocks: blockio::BlockIter, output_hex: bool, key_path: &str) {
+fn encrypt_command(
+    blocks: blockio::BlockIter,
+    output_hex: bool,
+    key_path: &str,
+    use_cbc: bool,
+    iv_hex: Option<&str>,
+) {
     let key = load_key(key_path);
-    blockio::process_blocks(blocks, output_hex, |b| encrypt::encrypt(b, &key));
+    if use_cbc {
+        let iv = parse_iv(iv_hex);
+        let mut block_vec: Vec<[u8; 16]> = blocks.collect();
+        cbc::encrypt_blocks(&mut block_vec, &key, &iv);
+        blockio::write_blocks(&block_vec, output_hex);
+    } else {
+        blockio::process_blocks(blocks, output_hex, |b| encrypt::encrypt(b, &key));
+    }
 }
 
-fn decrypt_command(blocks: blockio::BlockIter, output_hex: bool, key_path: &str) {
+fn decrypt_command(
+    blocks: blockio::BlockIter,
+    output_hex: bool,
+    key_path: &str,
+    use_cbc: bool,
+    iv_hex: Option<&str>,
+) {
     let key = load_key(key_path);
-    blockio::process_blocks(blocks, output_hex, |b| decrypt::decrypt(b, &key));
+    if use_cbc {
+        let iv = parse_iv(iv_hex);
+        let mut block_vec: Vec<[u8; 16]> = blocks.collect();
+        cbc::decrypt_blocks(&mut block_vec, &key, &iv);
+        blockio::write_blocks(&block_vec, output_hex);
+    } else {
+        blockio::process_blocks(blocks, output_hex, |b| decrypt::decrypt(b, &key));
+    }
+}
+
+fn parse_iv(iv_hex: Option<&str>) -> [u8; 16] {
+    let hex = iv_hex.unwrap_or_else(|| die("--iv is required when using --cbc"));
+    let bytes = decode_hex(hex).unwrap_or_else(|e| die(format!("invalid IV: {e}")));
+    if bytes.len() != 16 {
+        die(format!(
+            "IV must be 16 bytes (32 hex characters), got {}",
+            bytes.len()
+        ));
+    }
+    bytes.try_into().unwrap()
 }
 
 fn subbytes_command(blocks: blockio::BlockIter, output_hex: bool, inverse: bool) {
@@ -146,8 +205,14 @@ fn addroundkey_command(
 }
 
 fn load_key(path: &str) -> Key128 {
-    let bytes = fs::read(path).expect("Failed to read key file");
-    assert_eq!(bytes.len(), 16, "Key must be 16 bytes");
+    let bytes =
+        fs::read(path).unwrap_or_else(|e| die(format!("failed to read key file '{path}': {e}")));
+    if bytes.len() != 16 {
+        die(format!(
+            "key file must be exactly 16 bytes, got {}",
+            bytes.len()
+        ));
+    }
     Key128::new(bytes.try_into().unwrap())
 }
 
@@ -157,12 +222,13 @@ fn load_key(path: &str) -> Key128 {
 fn make_reader(input: Option<String>, file: Option<String>, input_hex: bool) -> Box<dyn Read> {
     if input_hex {
         let s = read_str(input, file);
-        let bytes = decode_hex(&s).expect("Failed to decode hex input");
+        let bytes =
+            decode_hex(&s).unwrap_or_else(|e| die(format!("failed to decode hex input: {e}")));
         Box::new(Cursor::new(bytes))
     } else if let Some(path) = file {
-        Box::new(BufReader::new(
-            File::open(path).expect("Failed to open input file"),
-        ))
+        Box::new(BufReader::new(File::open(&path).unwrap_or_else(|e| {
+            die(format!("failed to open input file '{path}': {e}"))
+        })))
     } else if let Some(s) = input {
         Box::new(Cursor::new(s.into_bytes()))
     } else {
@@ -172,9 +238,10 @@ fn make_reader(input: Option<String>, file: Option<String>, input_hex: bool) -> 
 
 fn read_str(input: Option<String>, file: Option<String>) -> String {
     if let Some(path) = file {
-        let raw = fs::read(&path).expect("Failed to read input file");
+        let raw = fs::read(&path)
+            .unwrap_or_else(|e| die(format!("failed to read input file '{path}': {e}")));
         String::from_utf8(raw)
-            .expect("Input file is not valid UTF-8")
+            .unwrap_or_else(|_| die(format!("input file '{path}' is not valid UTF-8")))
             .trim()
             .to_string()
     } else if let Some(s) = input {
@@ -183,7 +250,7 @@ fn read_str(input: Option<String>, file: Option<String>) -> String {
         let mut buf = String::new();
         io::stdin()
             .read_to_string(&mut buf)
-            .expect("Failed to read stdin");
+            .unwrap_or_else(|e| die(format!("failed to read stdin: {e}")));
         buf.trim().to_string()
     }
 }

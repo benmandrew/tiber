@@ -1,3 +1,4 @@
+use tiber::cbc;
 use tiber::decrypt::decrypt;
 use tiber::encrypt::encrypt;
 use tiber::key::{Key128, Key192, Key256};
@@ -98,6 +99,45 @@ fn test_encrypt_decrypt_e2e_key192() {
     encrypt(&mut data, &key);
     decrypt(&mut data, &key);
     assert_eq!(data, original);
+}
+
+#[test]
+fn test_cbc_different_iv_produces_different_ciphertext() {
+    let key = Key128::new([0u8; 16]);
+    let iv_a = [0u8; 16];
+    let iv_b = [0x01u8; 16];
+    let plaintext = [[0x42u8; 16]; 2];
+
+    let mut blocks_a = plaintext;
+    cbc::encrypt_blocks(&mut blocks_a, &key, &iv_a);
+
+    let mut blocks_b = plaintext;
+    cbc::encrypt_blocks(&mut blocks_b, &key, &iv_b);
+
+    assert_ne!(blocks_a, blocks_b);
+}
+
+#[test]
+fn test_cbc_roundtrip_key256() {
+    use tiber::key::Key256;
+    let key = Key256::new([
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+        0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
+        0x1e, 0x1f,
+    ]);
+    let iv = [0xabu8; 16];
+    let original = [
+        [
+            0xdeu8, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc,
+            0xde, 0xf0,
+        ],
+        [0x11u8; 16],
+        [0x22u8; 16],
+    ];
+    let mut blocks = original;
+    cbc::encrypt_blocks(&mut blocks, &key, &iv);
+    cbc::decrypt_blocks(&mut blocks, &key, &iv);
+    assert_eq!(blocks, original);
 }
 
 #[test]

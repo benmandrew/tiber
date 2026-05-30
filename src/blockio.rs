@@ -70,6 +70,42 @@ where
     }
 }
 
+/// Write pre-processed blocks to stdout as hex or binary.
+pub fn write_blocks(blocks: &[[u8; 16]], output_hex: bool) {
+    if output_hex {
+        write_blocks_hex(blocks);
+    } else {
+        write_blocks_bin(blocks);
+    }
+}
+
+fn write_blocks_hex(blocks: &[[u8; 16]]) {
+    let stdout = io::stdout();
+    let mut writer = BufWriter::new(stdout.lock());
+    let hex_lines: Vec<String> = blocks
+        .iter()
+        .map(|block| {
+            block
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>()
+        })
+        .collect();
+    let hex_output = hex_lines.join("\n") + "\n";
+    writer.write_all(hex_output.as_bytes()).unwrap();
+    writer.flush().unwrap();
+}
+
+fn write_blocks_bin(blocks: &[[u8; 16]]) {
+    let stdout = io::stdout();
+    let mut writer = BufWriter::new(stdout.lock());
+    for block in blocks {
+        writer.write_all(block).unwrap();
+    }
+    writeln!(writer).unwrap();
+    writer.flush().unwrap();
+}
+
 fn process_blocks_hex<F>(blocks: BlockIter, f: F)
 where
     F: Fn(&mut [u8; 16]) + Sync,
