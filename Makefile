@@ -40,7 +40,7 @@ coverage:
 		exit 1 ; \
 	}
 	@rustup component add llvm-tools-preview --toolchain stable >/dev/null 2>&1
-	@cargo llvm-cov --json --summary-only 2>/dev/null | cargo run --package xtask -q
+	@cargo llvm-cov --ignore-filename-regex='bench\.rs' --json --summary-only 2>/dev/null | cargo run --package xtask -q
 
 FUZZ_CORPUS := fuzz/corpus
 

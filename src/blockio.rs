@@ -61,7 +61,7 @@ impl Iterator for BlockIter {
 /// If `output_hex` is true, output is hex-encoded, otherwise raw binary.
 pub fn process_blocks<F>(blocks: BlockIter, output_hex: bool, f: F)
 where
-    F: Fn(&mut [u8; 16]) + Sync,
+    F: Fn(&mut [u8; 16]) + Sync + Send,
 {
     if output_hex {
         process_blocks_hex(blocks, f);
@@ -72,16 +72,17 @@ where
 
 /// Write pre-processed blocks to stdout as hex or binary.
 pub fn write_blocks(blocks: &[[u8; 16]], output_hex: bool) {
-    if output_hex {
-        write_blocks_hex(blocks);
-    } else {
-        write_blocks_bin(blocks);
-    }
-}
-
-fn write_blocks_hex(blocks: &[[u8; 16]]) {
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
+    if output_hex {
+        write_hex(&mut writer, blocks);
+    } else {
+        write_bin(&mut writer, blocks);
+    }
+    writer.flush().unwrap();
+}
+
+fn write_hex<W: Write>(writer: &mut W, blocks: &[[u8; 16]]) {
     let hex_lines: Vec<String> = blocks
         .iter()
         .map(|block| {
@@ -91,61 +92,39 @@ fn write_blocks_hex(blocks: &[[u8; 16]]) {
                 .collect::<String>()
         })
         .collect();
-    let hex_output = hex_lines.join("\n") + "\n";
-    writer.write_all(hex_output.as_bytes()).unwrap();
-    writer.flush().unwrap();
+    writer
+        .write_all((hex_lines.join("\n") + "\n").as_bytes())
+        .unwrap();
 }
 
-fn write_blocks_bin(blocks: &[[u8; 16]]) {
-    let stdout = io::stdout();
-    let mut writer = BufWriter::new(stdout.lock());
+fn write_bin<W: Write>(writer: &mut W, blocks: &[[u8; 16]]) {
     for block in blocks {
         writer.write_all(block).unwrap();
     }
     writeln!(writer).unwrap();
-    writer.flush().unwrap();
 }
 
 fn process_blocks_hex<F>(blocks: BlockIter, f: F)
 where
-    F: Fn(&mut [u8; 16]) + Sync,
+    F: Fn(&mut [u8; 16]) + Sync + Send,
 {
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
     let mut block_vec: Vec<[u8; 16]> = blocks.collect();
-    let hex_lines: Vec<String> = block_vec
-        .par_iter_mut()
-        .map(|block| {
-            f(block);
-            block
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>()
-        })
-        .collect();
-    let hex_output = hex_lines.join("\n") + "\n";
-    writer.write_all(hex_output.as_bytes()).unwrap();
+    block_vec.par_iter_mut().for_each(f);
+    write_hex(&mut writer, &block_vec);
     writer.flush().unwrap();
 }
 
 fn process_blocks_bin<F>(blocks: BlockIter, f: F)
 where
-    F: Fn(&mut [u8; 16]) + Sync,
+    F: Fn(&mut [u8; 16]) + Sync + Send,
 {
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
     let mut block_vec: Vec<[u8; 16]> = blocks.collect();
-    let processed_blocks: Vec<[u8; 16]> = block_vec
-        .par_iter_mut()
-        .map(|block| {
-            f(block);
-            *block
-        })
-        .collect();
-    for block in processed_blocks {
-        writer.write_all(&block).unwrap();
-    }
-    writeln!(writer).unwrap();
+    block_vec.par_iter_mut().for_each(f);
+    write_bin(&mut writer, &block_vec);
     writer.flush().unwrap();
 }
 
@@ -219,5 +198,26 @@ mod tests {
         while iter.next().is_some() {}
         assert_eq!(iter.next(), None);
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn write_hex_encodes_blocks_as_newline_separated_hex() {
+        let blocks = [[0x00u8; 16], [0xffu8; 16]];
+        let mut buf = Vec::new();
+        write_hex(&mut buf, &blocks);
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            "00000000000000000000000000000000\nffffffffffffffffffffffffffffffff\n"
+        );
+    }
+
+    #[test]
+    fn write_bin_writes_raw_bytes_followed_by_newline() {
+        let blocks = [[0xabu8; 16]];
+        let mut buf = Vec::new();
+        write_bin(&mut buf, &blocks);
+        let mut expected = vec![0xabu8; 16];
+        expected.push(b'\n');
+        assert_eq!(buf, expected);
     }
 }

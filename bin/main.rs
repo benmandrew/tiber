@@ -379,4 +379,55 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         assert_eq!(key.key, key_bytes);
     }
+
+    fn write_key(name: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(name);
+        std::fs::write(&path, [0u8; 16]).unwrap();
+        path
+    }
+
+    #[test]
+    fn parse_iv_valid_hex() {
+        let iv = parse_iv(Some("000102030405060708090a0b0c0d0e0f"));
+        assert_eq!(
+            iv,
+            [
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                0x0e, 0x0f
+            ]
+        );
+    }
+
+    #[test]
+    fn encrypt_command_cbc_does_not_panic() {
+        let key_path = write_key("tiber_test_enc_cbc.bin");
+        let reader: Box<dyn Read> = Box::new(std::io::Cursor::new(b"Hello, world!   ".to_vec()));
+        encrypt_command(
+            blockio::BlockIter::new(reader),
+            true,
+            key_path.to_str().unwrap(),
+            true,
+            Some("00000000000000000000000000000000"),
+        );
+        std::fs::remove_file(&key_path).unwrap();
+    }
+
+    #[test]
+    fn decrypt_command_cbc_does_not_panic() {
+        let key_path = write_key("tiber_test_dec_cbc.bin");
+        // NIST SP 800-38A ciphertext block (key=0x00*16, IV=0x00*16)
+        let ciphertext = [
+            0x66, 0xe9, 0x4b, 0xd4, 0xef, 0x8a, 0x2c, 0x3b, 0x88, 0x4c, 0xfa, 0x59, 0xca, 0x34,
+            0x2b, 0x2e,
+        ];
+        let reader: Box<dyn Read> = Box::new(std::io::Cursor::new(ciphertext.to_vec()));
+        decrypt_command(
+            blockio::BlockIter::new(reader),
+            true,
+            key_path.to_str().unwrap(),
+            true,
+            Some("00000000000000000000000000000000"),
+        );
+        std::fs::remove_file(&key_path).unwrap();
+    }
 }
