@@ -24,7 +24,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [lint]
     steps:
       - uses: actions/checkout@v6
       - name: Install Rust
@@ -51,9 +51,47 @@ jobs:
       - name: Test
         run: cargo test --all-targets
 
+  fuzz:
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust (nightly)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Cache cargo-fuzz
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('fuzz/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-fuzz-
+      - name: Install cargo-fuzz
+        run: |
+          if ! command -v cargo-fuzz > /dev/null; then
+            cargo install cargo-fuzz
+          fi
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/roundtrip
+          key: fuzz-corpus-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-
+      - name: Generate seed corpus
+        run: make fuzz-corpus
+      - name: Build fuzz target
+        run: make fuzz-build
+      - name: Replay corpus
+        run: cargo +nightly fuzz run roundtrip fuzz/corpus/roundtrip -- -runs=0
+      - name: Fuzz (60s)
+        run: cargo +nightly fuzz run roundtrip fuzz/corpus/roundtrip -- -max_total_time=60 -print_final_stats=1
+
   docker:
     name: Push Docker Image (${{ matrix.name }})
-    needs: [test]
+    needs: [test, fuzz]
     if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
@@ -129,7 +167,7 @@ jobs:
 
   docker-fuzz:
     name: Push Fuzz Docker (${{ matrix.name }})
-    needs: [test]
+    needs: [test, fuzz]
     if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
