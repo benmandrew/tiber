@@ -1,4 +1,7 @@
-.PHONY: build-native build-wasm fmt fmt-ci lint coverage fuzz-corpus fuzz-build fuzz
+.PHONY: build-native build-wasm site fmt fmt-ci lint coverage fuzz-corpus fuzz-build fuzz
+
+SITE_WASM_PATH ?= ../pkg/tiber_wasm.js
+SITE_DIST      ?= dist/site
 
 BOLD_CYAN := \033[1;36m
 RESET := \033[0m
@@ -8,6 +11,14 @@ define log
 endef
 
 all: build-native build-wasm
+
+site: build-wasm
+	$(call log,Building site assets)
+	@mkdir -p $(SITE_DIST)
+	@sed 's|__TIBER_WASM_PATH__|$(SITE_WASM_PATH)|g' wasm/src/main.js > $(SITE_DIST)/main.js
+	@cp wasm/src/style.site.css $(SITE_DIST)/style.css
+	@cp wasm/pkg/tiber_wasm.js $(SITE_DIST)/tiber_wasm.js
+	@cp wasm/pkg/tiber_wasm_bg.wasm $(SITE_DIST)/tiber_wasm_bg.wasm
 
 build-native:
 	$(call log,Building native binary)

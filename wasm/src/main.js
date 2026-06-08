@@ -1,4 +1,4 @@
-import init, { encrypt_rounds, decrypt_rounds } from '../pkg/tiber_wasm.js';
+import init, { encrypt_rounds, decrypt_rounds } from '__TIBER_WASM_PATH__';
 await init();
 
 // ---------- Formatting ----------
