@@ -100,9 +100,20 @@ $ docker run -p 8080:80 benmandrew/tiber
 
 ## Build
 
+The [Nix](https://nixos.org) flake in this repo provides every tool the build needs
+(Rust stable + nightly, `wasm-pack`, `cargo-fuzz`, `cargo-llvm-cov`, `expect`, `clang`/`llvm`,
+`python3`) pinned via `flake.lock`. This is the recommended way to build and test the project:
+
 ```sh
+$ nix develop
 $ make
 ```
+
+`nix develop -c <command>` runs a single command inside the shell without starting an
+interactive session, e.g. `nix develop -c cargo test --all-targets`.
+
+Without Nix, install the equivalent tools yourself (see `flake.nix` for the exact list) and run
+`make` directly.
 
 ## Documentation
 

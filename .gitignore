@@ -7,3 +7,4 @@
 /fuzz/findings
 /fuzz/artifacts
 /dist
+/.nix-rust
